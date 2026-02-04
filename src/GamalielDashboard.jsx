@@ -64,33 +64,46 @@ const CheckboxItem = ({ label, subtitle, checked, onToggle }) => (
   </label>
 );
 
-// Glass Card Component with proper reflective effects
-const GlassCard = ({ children, className = '', rounded = '2xl' }) => (
-  <div className={`relative overflow-hidden ${rounded === 'full' ? 'rounded-full' : 'rounded-2xl'} ${className}`} style={{
-    background: 'rgba(255, 255, 255, 0.025)',
-    backdropFilter: 'blur(16px) saturate(180%)',
-  }}>
-    {/* Gradient border */}
-    <div className={`absolute inset-0 ${rounded === 'full' ? 'rounded-full' : 'rounded-2xl'} pointer-events-none`} style={{
-      padding: '1px',
-      background: 'linear-gradient(135deg, #FF4500, #D12D6F, #8B008B)',
-      mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-      WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-      maskComposite: 'exclude',
-      WebkitMaskComposite: 'xor',
-      opacity: 0.5
-    }} />
-    {/* Top specular highlight */}
-    <div className="absolute top-0 left-[10%] right-[10%] h-[1px] pointer-events-none z-10" style={{
-      background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.1), transparent)'
-    }} />
-    {/* Left edge specular highlight */}
-    <div className="absolute top-[5%] left-0 bottom-[30%] w-[1px] pointer-events-none z-10" style={{
-      background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.3), transparent)'
-    }} />
-    <div className="relative z-10">{children}</div>
-  </div>
-);
+// Glass Card Component with proper reflective effects and jump hover
+const GlassCard = ({ children, className = '', rounded = '2xl' }) => {
+  const [isHovered, setIsHovered] = React.useState(false);
+
+  return (
+    <div
+      className={`relative overflow-hidden ${rounded === 'full' ? 'rounded-full' : 'rounded-2xl'} ${className} transition-all duration-300 ease-out cursor-pointer`}
+      style={{
+        background: 'rgba(255, 255, 255, 0.025)',
+        backdropFilter: 'blur(16px) saturate(180%)',
+        transform: isHovered ? 'translateY(-8px)' : 'translateY(0)',
+        boxShadow: isHovered
+          ? '0 20px 40px -15px rgba(255, 69, 0, 0.3), 0 10px 20px -10px rgba(139, 0, 139, 0.2)'
+          : '0 0 0 transparent',
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Gradient border */}
+      <div className={`absolute inset-0 ${rounded === 'full' ? 'rounded-full' : 'rounded-2xl'} pointer-events-none transition-opacity duration-300`} style={{
+        padding: '1px',
+        background: 'linear-gradient(135deg, #FF4500, #D12D6F, #8B008B)',
+        mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+        WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+        maskComposite: 'exclude',
+        WebkitMaskComposite: 'xor',
+        opacity: isHovered ? 0.8 : 0.5
+      }} />
+      {/* Top specular highlight */}
+      <div className="absolute top-0 left-[10%] right-[10%] h-[1px] pointer-events-none z-10" style={{
+        background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.1), transparent)'
+      }} />
+      {/* Left edge specular highlight */}
+      <div className="absolute top-[5%] left-0 bottom-[30%] w-[1px] pointer-events-none z-10" style={{
+        background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.3), transparent)'
+      }} />
+      <div className="relative z-10">{children}</div>
+    </div>
+  );
+};
 
 // AI Pulsing Indicator
 const AIPulse = () => {
@@ -114,23 +127,41 @@ const AIPulse = () => {
   );
 };
 
-// Gradient Button with reflective effect
-const GradientButton = ({ children, onClick, className = '' }) => (
-  <button
-    onClick={onClick}
-    className={`relative overflow-hidden text-white px-8 py-4 rounded-2xl font-black text-xs tracking-[0.3em] uppercase transition-all hover:scale-105 active:scale-95 ${className}`}
-    style={{
-      background: 'linear-gradient(90deg, #FF4500 0%, #8B008B 100%)',
-      boxShadow: '0 10px 30px -10px rgba(255, 69, 0, 0.5)'
-    }}
-  >
-    {/* Top specular highlight */}
-    <div className="absolute top-0 left-[10%] right-[10%] h-[1px] pointer-events-none" style={{
-      background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.2), transparent)'
-    }} />
-    {children}
-  </button>
-);
+// Gradient Button with reflective effect and cave-in click
+const GradientButton = ({ children, onClick, className = '' }) => {
+  const [isPressed, setIsPressed] = React.useState(false);
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseDown={() => setIsPressed(true)}
+      onMouseUp={() => setIsPressed(false)}
+      onMouseLeave={() => setIsPressed(false)}
+      onTouchStart={() => setIsPressed(true)}
+      onTouchEnd={() => setIsPressed(false)}
+      className={`relative overflow-hidden text-white px-8 py-4 rounded-2xl font-black text-xs tracking-[0.3em] uppercase transition-all duration-150 hover:scale-105 ${className}`}
+      style={{
+        background: isPressed
+          ? 'linear-gradient(90deg, #CC3700 0%, #6B006B 100%)'
+          : 'linear-gradient(90deg, #FF4500 0%, #8B008B 100%)',
+        boxShadow: isPressed
+          ? 'inset 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(255, 69, 0, 0.3)'
+          : '0 10px 30px -10px rgba(255, 69, 0, 0.5)',
+        transform: isPressed ? 'scale(0.97)' : undefined,
+      }}
+    >
+      {/* Top specular highlight - hidden when pressed */}
+      <div
+        className="absolute top-0 left-[10%] right-[10%] h-[1px] pointer-events-none transition-opacity duration-150"
+        style={{
+          background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.2), transparent)',
+          opacity: isPressed ? 0 : 1
+        }}
+      />
+      {children}
+    </button>
+  );
+};
 
 // Section Header Component
 const SectionHeader = ({ number, emoji, title }) => (

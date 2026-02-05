@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { analyzeSermon } from './services/claudeService';
 
 // Gradient text style helper - ensures cross-browser compatibility
 const gradientTextStyle = {
@@ -179,7 +180,22 @@ export default function GamalielDashboard() {
   const [preachDate, setPreachDate] = useState('');
   const [primaryGoal, setPrimaryGoal] = useState('');
   const [mediaType, setMediaType] = useState('voice');
-  const [recordingStatus, setRecordingStatus] = useState('ready');
+  const [recordingStatus, setRecordingStatus] = useState('ready'); // 'ready', 'recording', 'stopped'
+
+  // Media & Recording state
+  const [mediaFile, setMediaFile] = useState(null);
+  const [mediaPreviewUrl, setMediaPreviewUrl] = useState(null);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const timerRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // AI Analysis state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState(null);
+  const [analysisError, setAnalysisError] = useState(null);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
 
   // Sacred Foundation
   const [theologicalFidelity, setTheologicalFidelity] = useState(false);
@@ -207,6 +223,148 @@ export default function GamalielDashboard() {
   // Calculate total score
   const totalScore = relevancy + clarity + connectivity + precision + callToAction +
     relatability + pacing + enthusiasm + charisma;
+
+  // Format recording time as MM:SS
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Handle file upload
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setMediaFile(file);
+      setMediaPreviewUrl(URL.createObjectURL(file));
+      setRecordingStatus('stopped');
+      // Auto-detect media type
+      if (file.type.startsWith('video/')) {
+        setMediaType('video');
+      } else {
+        setMediaType('voice');
+      }
+    }
+  };
+
+  // Start recording
+  const startRecording = async () => {
+    try {
+      const constraints = mediaType === 'video'
+        ? { audio: true, video: true }
+        : { audio: true };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      const mimeType = mediaType === 'video' ? 'video/webm' : 'audio/webm';
+      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
+      recordedChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+        const file = new File([blob], `sermon-recording.${mediaType === 'video' ? 'webm' : 'webm'}`, { type: mimeType });
+        setMediaFile(file);
+        setMediaPreviewUrl(URL.createObjectURL(blob));
+
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorderRef.current.start();
+      setRecordingStatus('recording');
+      setRecordingTime(0);
+
+      // Start timer
+      timerRef.current = setInterval(() => {
+        setRecordingTime(t => t + 1);
+      }, 1000);
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      alert('Could not access microphone/camera. Please check permissions.');
+    }
+  };
+
+  // Stop recording
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && recordingStatus === 'recording') {
+      mediaRecorderRef.current.stop();
+      setRecordingStatus('stopped');
+      clearInterval(timerRef.current);
+    }
+  };
+
+  // Toggle recording
+  const toggleRecording = () => {
+    if (recordingStatus === 'recording') {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  // Clear media
+  const clearMedia = () => {
+    setMediaFile(null);
+    setMediaPreviewUrl(null);
+    setRecordingStatus('ready');
+    setRecordingTime(0);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Run AI analysis
+  const runAnalysis = async () => {
+    if (!mediaFile) {
+      alert('Please upload or record a sermon first.');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setShowAnalysisModal(true);
+
+    try {
+      const result = await analyzeSermon(mediaFile, {
+        title: sermonTitle,
+        goal: primaryGoal,
+        date: preachDate,
+      });
+
+      setAnalysisResult(result);
+
+      // Auto-fill scores from AI analysis
+      if (result.scores) {
+        const s = result.scores;
+        // Sacred Foundation
+        if (s.theologicalFidelity !== null) setTheologicalFidelity(s.theologicalFidelity);
+        if (s.exegeticalSoundness !== null) setExegeticalSoundness(s.exegeticalSoundness);
+        if (s.gospelCentrality !== null) setGospelCentrality(s.gospelCentrality);
+        // Structural Weight
+        if (s.relevancy !== null) setRelevancy(s.relevancy);
+        if (s.clarity !== null) setClarity(s.clarity);
+        if (s.connectivity !== null) setConnectivity(s.connectivity);
+        if (s.precision !== null) setPrecision(s.precision);
+        if (s.callToAction !== null) setCallToAction(s.callToAction);
+        // Vocal Cadence
+        if (s.relatability !== null) setRelatability(s.relatability);
+        if (s.pacing !== null) setPacing(s.pacing);
+        if (s.enthusiasm !== null) setEnthusiasm(s.enthusiasm);
+        if (s.charisma !== null) setCharisma(s.charisma);
+      }
+    } catch (error) {
+      console.error('Analysis error:', error);
+      setAnalysisError(error.message);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   return (
     <div className="min-h-screen text-white font-sans selection:bg-orange-500/30" style={{
@@ -288,52 +446,106 @@ export default function GamalielDashboard() {
               <div className="flex flex-col gap-4">
                 <div>
                   <h4 className="text-sm font-bold tracking-tight uppercase" style={gradientTextStyle}>Sermon Recording</h4>
-                  <p className="text-[10px] text-white/70 leading-relaxed mt-1">Analyze the rhythm of the spoken word in real-time through high-fidelity capture.</p>
+                  <p className="text-[10px] text-white/70 leading-relaxed mt-1">Upload a recording or record directly. Gamaliel will analyze your sermon delivery.</p>
                 </div>
 
+                {/* Upload & Record Options */}
                 <div className="flex flex-wrap items-center gap-3">
-                  {/* AI Assistant Button */}
-                  <div className="flex items-center gap-3 bg-white/5 rounded-xl px-3 py-2 border border-white/5 hover:border-[#39ff14]/30 transition-all cursor-pointer flex-1 min-w-[200px]">
-                    <div className="flex flex-col flex-1">
-                      <span className="text-[7px] font-mono font-bold text-[#39ff14] uppercase tracking-[0.2em]">🤖 Gamaliel AI Assistant</span>
-                      <span className="text-white text-[9px] font-mono font-bold uppercase tracking-widest mt-0.5">Start AI Analysis</span>
-                    </div>
-                    <AIPulse />
+                  {/* File Upload Button */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    accept="audio/*,video/*"
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-2 bg-white/5 rounded-xl px-4 py-2.5 border border-white/10 hover:border-orange-500/50 transition-all"
+                  >
+                    <span className="text-lg">📁</span>
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-white">Upload File</span>
+                  </button>
+
+                  {/* Media Type Toggle */}
+                  <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/5">
+                    <button
+                      onClick={() => setMediaType('voice')}
+                      className={`flex items-center gap-1 transition-colors ${mediaType === 'voice' ? 'text-[#FF4500]' : 'text-white/60 hover:text-white'}`}
+                    >
+                      <span className="text-sm">🎙️</span>
+                      <span className="text-[8px] font-bold uppercase tracking-wider">Voice</span>
+                    </button>
+                    <div className="w-px h-4 bg-white/10" />
+                    <button
+                      onClick={() => setMediaType('video')}
+                      className={`flex items-center gap-1 transition-colors ${mediaType === 'video' ? 'text-[#FF4500]' : 'text-white/60 hover:text-white'}`}
+                    >
+                      <span className="text-sm">📹</span>
+                      <span className="text-[8px] font-bold uppercase tracking-wider">Video</span>
+                    </button>
                   </div>
 
-                  {/* Recording Controls */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/5">
+                  {/* Record Button */}
+                  <button
+                    onClick={toggleRecording}
+                    className="w-10 h-10 rounded-full border-2 border-orange-500/30 flex items-center justify-center active:scale-90 transition-transform"
+                  >
+                    <div className={`bg-[#FF4500] ${recordingStatus === 'recording' ? 'w-3 h-3 rounded-sm' : 'w-4 h-4 rounded-full'}`} style={{
+                      boxShadow: '0 0 12px #FF4500'
+                    }} />
+                  </button>
+                  <span className="text-[8px] text-white uppercase font-black tracking-[0.3em]">
+                    {recordingStatus === 'recording' ? formatTime(recordingTime) : recordingStatus === 'stopped' ? 'Done' : 'Record'}
+                  </span>
+                </div>
+
+                {/* Media Preview */}
+                {mediaFile && (
+                  <div className="bg-white/5 rounded-xl p-3 border border-white/10">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-white/70">
+                        {mediaFile.type.startsWith('video/') ? '📹' : '🎙️'} {mediaFile.name}
+                      </span>
                       <button
-                        onClick={() => setMediaType('voice')}
-                        className={`flex items-center gap-1 transition-colors ${mediaType === 'voice' ? 'text-[#FF4500]' : 'text-white/60 hover:text-white'}`}
+                        onClick={clearMedia}
+                        className="text-[8px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300"
                       >
-                        <span className="text-sm">🎙️</span>
-                        <span className="text-[8px] font-bold uppercase tracking-wider">Voice</span>
-                      </button>
-                      <div className="w-px h-4 bg-white/10" />
-                      <button
-                        onClick={() => setMediaType('video')}
-                        className={`flex items-center gap-1 transition-colors ${mediaType === 'video' ? 'text-[#FF4500]' : 'text-white/60 hover:text-white'}`}
-                      >
-                        <span className="text-sm">📹</span>
-                        <span className="text-[8px] font-bold uppercase tracking-wider">Video</span>
+                        ✕ Remove
                       </button>
                     </div>
+                    {mediaPreviewUrl && (
+                      mediaFile.type.startsWith('video/') ? (
+                        <video src={mediaPreviewUrl} controls className="w-full rounded-lg max-h-48" />
+                      ) : (
+                        <audio src={mediaPreviewUrl} controls className="w-full" />
+                      )
+                    )}
+                  </div>
+                )}
 
-                    <button
-                      onClick={() => setRecordingStatus(recordingStatus === 'ready' ? 'recording' : 'ready')}
-                      className="w-9 h-9 rounded-full border-2 border-orange-500/30 flex items-center justify-center active:scale-90 transition-transform"
-                    >
-                      <div className={`rounded-full bg-[#FF4500] ${recordingStatus === 'recording' ? 'w-2.5 h-2.5 rounded-sm' : 'w-4 h-4'}`} style={{
-                        boxShadow: '0 0 12px #FF4500'
-                      }} />
-                    </button>
-                    <span className="text-[8px] text-white uppercase font-black tracking-[0.3em]">
-                      {recordingStatus === 'recording' ? 'REC' : 'Ready'}
+                {/* AI Assistant Button */}
+                <button
+                  onClick={runAnalysis}
+                  disabled={!mediaFile || isAnalyzing}
+                  className={`flex items-center gap-3 rounded-xl px-4 py-3 border transition-all ${
+                    mediaFile && !isAnalyzing
+                      ? 'bg-[#39ff14]/10 border-[#39ff14]/30 hover:border-[#39ff14]/60 cursor-pointer'
+                      : 'bg-white/5 border-white/5 opacity-50 cursor-not-allowed'
+                  }`}
+                >
+                  <div className="flex flex-col flex-1 text-left">
+                    <span className="text-[8px] font-mono font-bold text-[#39ff14] uppercase tracking-[0.2em]">🤖 Gamaliel AI Assistant</span>
+                    <span className="text-white text-[10px] font-mono font-bold uppercase tracking-widest mt-0.5">
+                      {isAnalyzing ? 'Analyzing Sermon...' : mediaFile ? 'Start AI Analysis' : 'Upload or Record First'}
                     </span>
                   </div>
-                </div>
+                  {isAnalyzing ? (
+                    <div className="w-4 h-4 border-2 border-[#39ff14] border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <AIPulse />
+                  )}
+                </button>
               </div>
             </div>
           </GlassCard>
@@ -495,6 +707,75 @@ export default function GamalielDashboard() {
           </p>
         </div>
       </footer>
+
+      {/* Analysis Results Modal */}
+      {showAnalysisModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-2xl" style={{
+            background: 'rgba(7, 3, 4, 0.95)',
+            border: '1px solid rgba(255, 69, 0, 0.3)'
+          }}>
+            {/* Modal Header */}
+            <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-white/10" style={{
+              background: 'rgba(7, 3, 4, 0.98)'
+            }}>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🤖</span>
+                <h3 className="text-sm font-black uppercase tracking-widest" style={gradientTextStyle}>Gamaliel Analysis</h3>
+              </div>
+              <button
+                onClick={() => setShowAnalysisModal(false)}
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+              >
+                <span className="text-white text-sm">✕</span>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-4 overflow-y-auto max-h-[calc(85vh-60px)]">
+              {isAnalyzing ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                  <div className="w-12 h-12 border-3 border-[#39ff14] border-t-transparent rounded-full animate-spin" />
+                  <p className="text-white/70 text-sm">Gamaliel is listening to your sermon...</p>
+                  <p className="text-white/40 text-xs">This may take a moment for longer recordings</p>
+                </div>
+              ) : analysisError ? (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                  <h4 className="text-red-400 font-bold text-sm mb-2">Analysis Error</h4>
+                  <p className="text-white/70 text-xs">{analysisError}</p>
+                  <button
+                    onClick={() => {
+                      setAnalysisError(null);
+                      runAnalysis();
+                    }}
+                    className="mt-3 px-4 py-2 bg-red-500/20 rounded-lg text-red-300 text-xs font-bold uppercase tracking-wider hover:bg-red-500/30 transition-colors"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              ) : analysisResult ? (
+                <div className="space-y-4">
+                  {/* Success Message */}
+                  <div className="bg-[#39ff14]/10 border border-[#39ff14]/30 rounded-xl p-3 flex items-center gap-2">
+                    <span className="text-lg">✅</span>
+                    <p className="text-[#39ff14] text-xs font-bold uppercase tracking-wider">Analysis Complete - Scores Updated</p>
+                  </div>
+
+                  {/* Full Analysis */}
+                  <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                    <h4 className="text-xs font-black uppercase tracking-widest text-white/70 mb-3">Full Feedback</h4>
+                    <div className="prose prose-invert prose-sm max-w-none">
+                      <pre className="whitespace-pre-wrap text-white/80 text-xs leading-relaxed font-sans">
+                        {analysisResult.fullAnalysis}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Custom slider styles */}
       <style>{`

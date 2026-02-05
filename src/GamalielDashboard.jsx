@@ -385,13 +385,58 @@ export default function GamalielDashboard() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-8">
-        {/* Hero Section - Left aligned */}
-        <section className="mb-8">
-          <h1 className="text-4xl md:text-5xl font-black leading-[1.1] tracking-tighter uppercase mb-3">
-            <span style={gradientTextStyle}>HOMILETICS</span>
-            <br />
-            <span className="text-[#FF4500]">SCORECARD</span>
-          </h1>
+        {/* Hero Section with Logo */}
+        <section className="mb-8 flex flex-col items-center text-center">
+          {/* App Logo with 3D Glass Effect */}
+          <div
+            className="relative overflow-hidden rounded-3xl mb-4 transition-all duration-300 ease-out hover:-translate-y-2"
+            style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              backdropFilter: 'blur(20px) saturate(180%)',
+              boxShadow: '0 8px 32px -8px rgba(255, 69, 0, 0.2), 0 4px 16px -4px rgba(139, 0, 139, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.1)',
+              padding: '20px 30px',
+            }}
+          >
+            {/* Gradient border effect */}
+            <div className="absolute inset-0 rounded-3xl pointer-events-none" style={{
+              padding: '1px',
+              background: 'linear-gradient(135deg, rgba(255, 69, 0, 0.5), rgba(209, 45, 111, 0.5), rgba(139, 0, 139, 0.5))',
+              mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+              WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+              maskComposite: 'exclude',
+              WebkitMaskComposite: 'xor',
+            }} />
+            {/* Top specular highlight */}
+            <div className="absolute top-0 left-[15%] right-[15%] h-[1px] pointer-events-none" style={{
+              background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.15), transparent)'
+            }} />
+            {/* Left edge specular highlight */}
+            <div className="absolute top-[10%] left-0 bottom-[40%] w-[1px] pointer-events-none" style={{
+              background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.25), transparent)'
+            }} />
+            {/* Logo Image */}
+            <img
+              src="/Applogo.png"
+              alt="Gamaliel - Homiletics Scorecard"
+              className="relative z-10 h-24 md:h-32 w-auto object-contain"
+              style={{
+                filter: 'drop-shadow(0 4px 12px rgba(255, 69, 0, 0.3))'
+              }}
+              onError={(e) => {
+                // Fallback to text if logo not found
+                e.target.style.display = 'none';
+                e.target.nextElementSibling.style.display = 'block';
+              }}
+            />
+            {/* Fallback text if logo doesn't load */}
+            <div className="hidden text-center">
+              <h1 className="text-3xl md:text-4xl font-black leading-[1.1] tracking-tighter uppercase">
+                <span style={gradientTextStyle}>HOMILETICS</span>
+                <br />
+                <span className="text-[#FF4500]">SCORECARD</span>
+              </h1>
+            </div>
+          </div>
           <p className="text-white/70 text-sm font-light leading-relaxed max-w-md">
             Premium digital analysis of sermon weight, structure, and delivery. Designed for intentional preachers.
           </p>

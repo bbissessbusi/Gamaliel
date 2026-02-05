@@ -702,22 +702,10 @@ export default function GamalielDashboard() {
         </section>
 
         {/* Calculate Score Section - Centered */}
-        <section className="flex flex-col items-center justify-center gap-6 py-6 mb-6">
+        <section className="flex flex-col items-center justify-center py-6 mb-6">
           <GradientButton onClick={() => console.log('Calculate:', totalScore)}>
             CALCULATE SCORE
           </GradientButton>
-
-          <div className="flex items-center gap-6">
-            <GlassCard className="w-24 h-24" rounded="full">
-              <div className="w-full h-full flex flex-col items-center justify-center">
-                <span className="text-[8px] font-black tracking-tight uppercase" style={gradientTextStyle}>INDEX</span>
-                <span className="text-2xl font-black text-white font-mono">{totalScore}/90</span>
-              </div>
-            </GlassCard>
-            <div className="max-w-[100px]">
-              <p className="text-[8px] text-white uppercase font-black tracking-[0.2em] leading-relaxed">Composite Homiletics Index (CHI)</p>
-            </div>
-          </div>
         </section>
 
         {/* Glossary */}

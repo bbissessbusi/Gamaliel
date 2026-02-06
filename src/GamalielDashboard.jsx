@@ -475,8 +475,9 @@ export default function GamalielApp() {
       totalScore
     });
 
-    // Navigate to summary page
+    // Navigate to summary page and scroll to the very top
     setCurrentPage('summary');
+    window.scrollTo(0, 0);
   };
 
   // Reset and return to dashboard
@@ -491,8 +492,9 @@ export default function GamalielApp() {
     setPostAnalysis({ anchoring_point: '', structural_drift: '', measurable_step: '' });
     setRecordingStatus('ready');
 
-    // Return to dashboard
+    // Return to dashboard and scroll to top
     setCurrentPage('dashboard');
+    window.scrollTo(0, 0);
   };
 
   // ============================================================================
@@ -719,7 +721,7 @@ export default function GamalielApp() {
           <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
             <Logo height={28} />
             <button
-              onClick={() => setCurrentPage('dashboard')}
+              onClick={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }}
               className="text-[10px] font-bold tracking-[0.2em] text-white/60 hover:text-white transition-colors uppercase"
             >
               {'\u2190'} BACK

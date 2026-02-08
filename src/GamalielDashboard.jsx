@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import GlossaryPage from './GlossaryPage';
 import EvaluationHistoryPage from './EvaluationHistoryPage';
 import EvaluationSummaryPage from './EvaluationSummaryPage';
+import GuidedTourPage from './GuidedTourPage';
 import { analyzeSermon } from './services/claudeService';
 import { saveEvaluation, getEvaluations } from './services/supabaseService';
 
@@ -134,20 +135,14 @@ const GradientButton = ({ children, onClick, className = '', small = false, disa
   );
 };
 
-// Logo component with embedded SVG
+// Logo component using PNG
 const Logo = ({ height = 28, opacity = 1 }) => (
   <div style={{ height: `${height}px`, opacity, display: 'flex', alignItems: 'center', gap: '8px' }}>
-    <svg height={height} viewBox="0 0 60 40">
-      <defs>
-        <linearGradient id="logoGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#FF00FF" />
-          <stop offset="50%" stopColor="#8B00FF" />
-          <stop offset="100%" stopColor="#0066FF" />
-        </linearGradient>
-      </defs>
-      <text x="5" y="32" fill="url(#logoGrad)" fontSize="32" fontWeight="bold" fontFamily="serif" fontStyle="italic">G</text>
-      <text x="28" y="32" fill="url(#logoGrad)" fontSize="32" fontWeight="bold" fontFamily="serif" fontStyle="italic">L</text>
-    </svg>
+    <img
+      src="/Applogo.png"
+      alt="Gamaliel"
+      style={{ height: `${height}px`, objectFit: 'contain' }}
+    />
     <span style={{ fontSize: '8px', fontWeight: 900, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.6)' }}>GAMALIEL</span>
   </div>
 );
@@ -296,7 +291,7 @@ const AIPulse = () => {
 // ============================================================================
 
 export default function GamalielApp() {
-  const [currentPage, setCurrentPage] = useState('dashboard'); // 'dashboard' | 'summary' | 'glossary' | 'history'
+  const [currentPage, setCurrentPage] = useState('dashboard'); // 'dashboard' | 'summary' | 'glossary' | 'history' | 'tour'
   const [glossaryTerm, setGlossaryTerm] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState('');
@@ -504,6 +499,12 @@ export default function GamalielApp() {
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <Logo height={28} />
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => { setCurrentPage('tour'); }}
+              className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-[#FF4500] transition-colors uppercase"
+            >
+              TOUR
+            </button>
             <button
               onClick={() => { loadEvaluations(); setCurrentPage('history'); }}
               className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-[#FF4500] transition-colors uppercase"
@@ -806,7 +807,9 @@ export default function GamalielApp() {
     <div className="min-h-screen text-white font-sans selection:bg-orange-500/30" style={{
       background: `radial-gradient(circle at 10% 10%, rgba(255, 69, 0, 0.12) 0%, transparent 40%), radial-gradient(circle at 90% 90%, rgba(139, 0, 139, 0.12) 0%, transparent 40%), radial-gradient(circle at 50% 50%, rgba(57, 255, 20, 0.02) 0%, transparent 50%), #070304`
     }}>
-      {currentPage === 'glossary' ? (
+      {currentPage === 'tour' ? (
+        <GuidedTourPage onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onSkip={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
+      ) : currentPage === 'glossary' ? (
         <GlossaryPage scrollToTerm={glossaryTerm} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
       ) : currentPage === 'history' ? (
         <EvaluationHistoryPage evaluations={savedEvaluations} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />

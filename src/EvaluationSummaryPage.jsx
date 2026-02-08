@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 // ============================================================================
 
 const getScoreTheme = (score) => {
-  if (score >= 80) return { color: '#8B008B', emoji: '\u{1F451}' };
+  if (score >= 80) return { color: '#8B008B', emoji: '👑' };
   if (score >= 50) return { color: '#D12D6F', emoji: '' };
   return { color: '#FF4500', emoji: '' };
 };
@@ -85,7 +85,7 @@ const ScoreBar = ({ label, score, maxScore = 10 }) => {
 const FoundationItem = ({ label, checked }) => (
   <li className="flex items-center gap-3">
     <div className="w-5 h-5 flex items-center justify-center">
-      <span className="text-[12px]">{checked ? '\u2705' : '\u274C'}</span>
+      <span className="text-[12px]">{checked ? '✅' : '❌'}</span>
     </div>
     <span className="text-[10px] font-bold uppercase tracking-widest text-white/90">{label}</span>
   </li>
@@ -121,6 +121,7 @@ export default function EvaluationSummaryPage({
   structuralWeight,
   vocalCadence,
   postAnalysis,
+  evaluator,
   onBack,
   onNewEvaluation,
 }) {
@@ -155,7 +156,7 @@ export default function EvaluationSummaryPage({
               HOME
             </button>
             <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center">
-              <span className="text-sm">{'\uD83D\uDC64'}</span>
+              <span className="text-sm">👤</span>
             </div>
           </nav>
         </div>
@@ -172,6 +173,39 @@ export default function EvaluationSummaryPage({
               Evaluation Summary
             </h1>
             <ScoreCircle score={totalScore} />
+            {evaluator && evaluator.name && (
+              <div className="flex items-center justify-center gap-2 mt-6">
+                <span className="text-[8px] uppercase tracking-tighter text-white/30 font-bold">Evaluator:</span>
+                {evaluator.type === 'ai' ? (
+                  <>
+                    <span className="material-symbols-outlined text-[14px]" style={{ color: '#C026D3' }}>smart_toy</span>
+                    <span
+                      className="text-[13px] font-bold tracking-tight"
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        background: 'linear-gradient(90deg, #D12D6F, #C026D3)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                      }}
+                    >
+                      {evaluator.name}
+                    </span>
+                  </>
+                ) : (
+                  <span
+                    className="text-[18px] leading-none"
+                    style={{
+                      fontFamily: "'League Script', cursive",
+                      background: 'linear-gradient(90deg, #D12D6F, #C026D3)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                    }}
+                  >
+                    {evaluator.name}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </section>
 
@@ -231,18 +265,18 @@ export default function EvaluationSummaryPage({
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <PostAnalysisCard
-              emoji={'\u26A1'}
+              emoji="⚡"
               label={{ text: 'Prime Resonance', color: '#FF4500' }}
               content={postAnalysis.anchoring_point || 'No anchoring point recorded.'}
             />
             <PostAnalysisCard
-              emoji={'\uD83D\uDCC9'}
+              emoji="📉"
               emojiSize="text-[10px]"
               label={{ text: 'Structural Drift', color: '#D12D6F' }}
               content={postAnalysis.structural_drift || 'No structural drift identified.'}
             />
             <PostAnalysisCard
-              emoji={'\u2705'}
+              emoji="✅"
               emojiSize="text-[10px]"
               label={{ text: 'Measurable Step', color: '#8B008B' }}
               content={postAnalysis.measurable_step || 'No measurable step recorded.'}
@@ -262,19 +296,10 @@ export default function EvaluationSummaryPage({
       </main>
 
       {/* Footer */}
-      <footer className="py-20 mt-20">
-        <div className="max-w-7xl mx-auto px-6 text-center space-y-8">
-          <div className="flex items-center justify-center gap-3">
-            <div className="flex items-center gap-1.5 opacity-40">
-              <span className="text-xl md:text-2xl font-serif italic font-bold text-white">SI</span>
-              <div className="h-4 w-px bg-white/40 mx-1" />
-              <span className="text-[8px] md:text-[10px] font-black tracking-[0.4em] uppercase text-white">
-                Scribe Inc.
-              </span>
-            </div>
-          </div>
-          <p className="text-[8px] md:text-[9px] tracking-[0.8em] text-white/20 uppercase font-black">
-            {'\u00A9'} 2026 SCRIBE INC. {'\u2022'} WE FIX WHAT MARKETING CANNOT
+      <footer className="border-t border-white/5 py-8 mt-12">
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          <p className="text-[8px] md:text-[9px] tracking-[0.8em] text-white/40 uppercase font-black">
+            © 2026 SCRIBE INC.
           </p>
         </div>
       </footer>

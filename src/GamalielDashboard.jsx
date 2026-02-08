@@ -3,6 +3,7 @@ import GlossaryPage from './GlossaryPage';
 import EvaluationHistoryPage from './EvaluationHistoryPage';
 import EvaluationSummaryPage from './EvaluationSummaryPage';
 import { analyzeSermon } from './services/claudeService';
+import { saveEvaluation, getEvaluations } from './services/supabaseService';
 
 // ============================================================================
 // GLOSSARY TERM MAPPING (dashboard key → glossary card ID)
@@ -203,7 +204,7 @@ const CheckboxItem = ({ label, subtitle, checked, onToggle, onLabelClick }) => (
       style={{ borderRadius: '8px' }}
       onClick={onToggle}
     >
-      {checked && <span className="text-xl">{'\u2705'}</span>}
+      {checked && <span className="text-xl">✅</span>}
     </div>
     <div className="flex flex-col">
       <span className="font-bold text-white text-xs tracking-tight uppercase">
@@ -300,6 +301,7 @@ export default function GamalielApp() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState('');
   const [recordedFile, setRecordedFile] = useState(null);
+  const [savedEvaluations, setSavedEvaluations] = useState([]);
   const fileInputRef = useRef(null);
 
   // Form state
@@ -333,6 +335,10 @@ export default function GamalielApp() {
     enthusiasm: 0,
     charisma: 0,
   });
+
+  // Evaluator Signature
+  const [evaluatorType, setEvaluatorType] = useState('human'); // 'human' | 'ai'
+  const [evaluatorName, setEvaluatorName] = useState('');
 
   // Post Analysis
   const [postAnalysis, setPostAnalysis] = useState({
@@ -399,6 +405,10 @@ export default function GamalielApp() {
         measurable_step: stepMatch ? stepMatch[1].trim() : '',
       });
 
+      // Auto-set evaluator to AI Gamaliel
+      setEvaluatorType('ai');
+      setEvaluatorName('Gamaliel');
+
       setAnalysisStatus('Analysis complete!');
     } catch (error) {
       setAnalysisStatus(`Error: ${error.message}`);
@@ -428,14 +438,20 @@ export default function GamalielApp() {
     }
   };
 
-  // Handle Calculate Score - saves and navigates to summary
-  const handleCalculateScore = () => {
-    // In production: Save to Supabase here
-    console.log('Saving to Supabase...', {
-      sermonTitle, preachDate, primaryGoal,
-      sacredFoundation, structuralWeight, vocalCadence, postAnalysis,
-      totalScore
-    });
+  // Handle Calculate Score - saves to Supabase and navigates to summary
+  const handleCalculateScore = async () => {
+    const evaluator = { type: evaluatorType, name: evaluatorType === 'ai' ? 'Gamaliel' : evaluatorName };
+
+    // Save to Supabase
+    try {
+      await saveEvaluation({
+        sermonTitle, preachDate, primaryGoal,
+        sacredFoundation, structuralWeight, vocalCadence, postAnalysis,
+        totalScore, evaluator,
+      });
+    } catch (err) {
+      console.warn('Supabase save skipped:', err.message);
+    }
 
     // Navigate to summary page and scroll to the very top
     setCurrentPage('summary');
@@ -453,10 +469,22 @@ export default function GamalielApp() {
     setVocalCadence({ relatability: 0, pacing: 0, enthusiasm: 0, charisma: 0 });
     setPostAnalysis({ anchoring_point: '', structural_drift: '', measurable_step: '' });
     setRecordingStatus('ready');
+    setEvaluatorType('human');
+    setEvaluatorName('');
 
     // Return to dashboard and scroll to top
     setCurrentPage('dashboard');
     window.scrollTo(0, 0);
+  };
+
+  // Load evaluations from Supabase for history page
+  const loadEvaluations = async () => {
+    try {
+      const data = await getEvaluations();
+      setSavedEvaluations(data);
+    } catch {
+      console.warn('Could not load evaluations from Supabase. Using mock data.');
+    }
   };
 
   // Navigate to glossary, optionally scrolling to a specific term
@@ -477,7 +505,7 @@ export default function GamalielApp() {
           <Logo height={28} />
           <div className="flex items-center gap-3">
             <button
-              onClick={() => { setCurrentPage('history'); }}
+              onClick={() => { loadEvaluations(); setCurrentPage('history'); }}
               className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-[#FF4500] transition-colors uppercase"
             >
               HISTORY
@@ -513,15 +541,15 @@ export default function GamalielApp() {
         {/* Sermon Info Card */}
         <GlassCard className="mb-6">
           <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <InputField label="Sermon Title/Text" emoji={'\uD83D\uDCD6'} placeholder="e.g. Romans 8:1-4" value={sermonTitle} onChange={(e) => setSermonTitle(e.target.value)} />
-            <InputField label="Preach Date" emoji={'\uD83D\uDCC5'} type="date" value={preachDate} onChange={(e) => setPreachDate(e.target.value)} />
-            <InputField label="Primary Goal" emoji={'\uD83C\uDFAF'} placeholder="The core objective" value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)} />
+            <InputField label="Sermon Title/Text" emoji="📖" placeholder="e.g. Romans 8:1-4" value={sermonTitle} onChange={(e) => setSermonTitle(e.target.value)} />
+            <InputField label="Preach Date" emoji="📅" type="date" value={preachDate} onChange={(e) => setPreachDate(e.target.value)} />
+            <InputField label="Primary Goal" emoji="🎯" placeholder="The core objective" value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)} />
           </div>
         </GlassCard>
 
         {/* Digital Capture Section */}
         <section className="mb-6">
-          <SectionHeader emoji={'\uD83D\uDCF9'} title="Digital Capture" />
+          <SectionHeader emoji="📹" title="Digital Capture" />
           <GlassCard>
             <div className="p-5">
               <div className="flex flex-col gap-4">
@@ -548,7 +576,7 @@ export default function GamalielApp() {
                 {recordedFile && !isAnalyzing && (
                   <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2">
                     <span className="text-[9px] font-mono text-white/60">
-                      {'\uD83D\uDCC1'} {recordedFile.name}
+                      📁 {recordedFile.name}
                     </span>
                   </div>
                 )}
@@ -570,7 +598,7 @@ export default function GamalielApp() {
                     onClick={handleGamalielAnalysis}
                   >
                     <div className="flex flex-col flex-1">
-                      <span className="text-[7px] font-mono font-bold text-[#39ff14] uppercase tracking-[0.2em]">{'\uD83E\uDD16'} Gamaliel AI Assistant</span>
+                      <span className="text-[7px] font-mono font-bold text-[#39ff14] uppercase tracking-[0.2em]">🤖 Gamaliel AI Assistant</span>
                       <span className="text-white text-[9px] font-mono font-bold uppercase tracking-widest mt-0.5">
                         {isAnalyzing ? 'Analyzing...' : 'Start AI Analysis'}
                       </span>
@@ -582,12 +610,12 @@ export default function GamalielApp() {
                   <div className="flex items-center gap-3">
                     <PillContainer className="flex items-center gap-2 px-3 py-2.5">
                       <button onClick={() => setMediaType('voice')} className={`flex items-center gap-1 transition-colors ${mediaType === 'voice' ? 'text-[#FF4500]' : 'text-white/60 hover:text-white'}`}>
-                        <span className="text-sm">{'\uD83C\uDF99\uFE0F'}</span>
+                        <span className="text-sm">🎙️</span>
                         <span className="text-[8px] font-bold uppercase tracking-wider">Voice</span>
                       </button>
                       <div className="w-px h-4 bg-white/10" />
                       <button onClick={() => setMediaType('video')} className={`flex items-center gap-1 transition-colors ${mediaType === 'video' ? 'text-[#FF4500]' : 'text-white/60 hover:text-white'}`}>
-                        <span className="text-sm">{'\uD83D\uDCF9'}</span>
+                        <span className="text-sm">📹</span>
                         <span className="text-[8px] font-bold uppercase tracking-wider">Video</span>
                       </button>
                     </PillContainer>
@@ -620,7 +648,7 @@ export default function GamalielApp() {
 
         {/* Section 1: Sacred Foundation */}
         <section className="mb-6">
-          <SectionHeader number="1\uFE0F\u20E3" title="Sacred Foundation" />
+          <SectionHeader number="1️⃣" title="Sacred Foundation" />
           <GlassCard>
             <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <CheckboxItem label="Theological Fidelity" subtitle="Doctrinal accuracy" checked={sacredFoundation.theological_fidelity} onToggle={() => setSacredFoundation(p => ({...p, theological_fidelity: !p.theological_fidelity}))} onLabelClick={() => navigateToGlossary('theological_fidelity')} />
@@ -633,7 +661,7 @@ export default function GamalielApp() {
         {/* Sections 2 & 3 Side by Side */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <section className="min-w-0">
-            <SectionHeader number="2\uFE0F\u20E3" title="Structural Weight" />
+            <SectionHeader number="2️⃣" title="Structural Weight" />
             <GlassCard>
               <div className="p-4">
                 <SpectrumSlider label="Relevancy" value={structuralWeight.relevancy} onChange={(v) => setStructuralWeight(p => ({...p, relevancy: v}))} onLabelClick={() => navigateToGlossary('relevancy')} />
@@ -646,7 +674,7 @@ export default function GamalielApp() {
           </section>
 
           <section className="min-w-0">
-            <SectionHeader number="3\uFE0F\u20E3" title="Vocal Cadence" />
+            <SectionHeader number="3️⃣" title="Vocal Cadence" />
             <GlassCard>
               <div className="p-4">
                 <SpectrumSlider label="Relatability" value={vocalCadence.relatability} onChange={(v) => setVocalCadence(p => ({...p, relatability: v}))} onLabelClick={() => navigateToGlossary('relatability')} />
@@ -667,9 +695,9 @@ export default function GamalielApp() {
           }}>Critical Post-Analysis</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
-              { emoji: '\u26A1', color: '#F59E0B', label: 'Anchoring Point', key: 'anchoring_point', placeholder: 'Describe the most impactful segment...' },
-              { emoji: '\uD83D\uDCC9', color: '#3B82F6', label: 'Structural Drift', key: 'structural_drift', placeholder: 'Identify loss of focus...' },
-              { emoji: '\u2705', color: '#10B981', label: 'Measurable Step', key: 'measurable_step', placeholder: 'Specific improvement task...' },
+              { emoji: '⚡', color: '#F59E0B', label: 'Anchoring Point', key: 'anchoring_point', placeholder: 'Most impactful segment...' },
+              { emoji: '📉', color: '#3B82F6', label: 'Structural Drift', key: 'structural_drift', placeholder: 'Loss of focus area...' },
+              { emoji: '✅', color: '#10B981', label: 'Measurable Step', key: 'measurable_step', placeholder: 'Improvement task...' },
             ].map((item) => (
               <GlassCard key={item.key} className="h-full">
                 <div className="p-4 h-full flex flex-col">
@@ -693,15 +721,76 @@ export default function GamalielApp() {
           <GradientButton onClick={handleCalculateScore} disabled={totalScore === 0}>
             CALCULATE SCORE
           </GradientButton>
-          <p className="text-[9px] text-white/40 mt-3">Current Score: {totalScore}/90</p>
+
+          {/* Evaluator Signature */}
+          <div className="mt-8 w-full max-w-md">
+            <GlassCard>
+              <div className="p-5 space-y-4">
+                <label className="text-[8px] font-black text-white tracking-[0.3em] uppercase text-center block">
+                  Evaluator Signature
+                </label>
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    onClick={() => { setEvaluatorType('human'); setEvaluatorName(''); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[8px] font-bold uppercase tracking-wider transition-all ${
+                      evaluatorType === 'human'
+                        ? 'bg-white/10 border border-white/20 text-white'
+                        : 'bg-transparent border border-white/5 text-white/40 hover:text-white/60'
+                    }`}
+                  >
+                    ✍️ Human
+                  </button>
+                  <button
+                    onClick={() => { setEvaluatorType('ai'); setEvaluatorName('Gamaliel'); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[8px] font-bold uppercase tracking-wider transition-all ${
+                      evaluatorType === 'ai'
+                        ? 'bg-white/10 border border-[#39ff14]/30 text-[#39ff14]'
+                        : 'bg-transparent border border-white/5 text-white/40 hover:text-white/60'
+                    }`}
+                  >
+                    🤖 AI Gamaliel
+                  </button>
+                </div>
+                {evaluatorType === 'human' ? (
+                  <input
+                    type="text"
+                    placeholder="Enter evaluator name..."
+                    value={evaluatorName}
+                    onChange={(e) => setEvaluatorName(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 text-white placeholder:text-white/30 text-center focus:outline-none focus:ring-1 focus:ring-orange-500/50 [color-scheme:dark]"
+                    style={{
+                      borderRadius: '16px',
+                      padding: '10px 14px',
+                      fontFamily: "'League Script', cursive",
+                      fontSize: '18px',
+                    }}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center gap-2 py-2">
+                    <span className="material-symbols-outlined text-[16px]" style={{ color: '#C026D3' }}>smart_toy</span>
+                    <span
+                      className="text-[16px] font-bold tracking-tight"
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        background: 'linear-gradient(90deg, #D12D6F, #C026D3)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                      }}
+                    >
+                      Gamaliel
+                    </span>
+                  </div>
+                )}
+              </div>
+            </GlassCard>
+          </div>
         </section>
       </main>
 
       {/* Footer */}
       <footer className="border-t border-white/5 py-8 bg-black/40">
-        <div className="max-w-4xl mx-auto px-4 text-center space-y-3">
-          <Logo height={24} opacity={0.7} />
-          <p className="text-[8px] tracking-[0.5em] text-white/50 uppercase font-black">{'\u00A9'} 2026 THE SCRIBES INC.</p>
+        <div className="max-w-4xl mx-auto px-4 text-center">
+          <p className="text-[8px] tracking-[0.5em] text-white/50 uppercase font-black">© 2026 SCRIBE INC.</p>
         </div>
       </footer>
     </>
@@ -720,7 +809,7 @@ export default function GamalielApp() {
       {currentPage === 'glossary' ? (
         <GlossaryPage scrollToTerm={glossaryTerm} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
       ) : currentPage === 'history' ? (
-        <EvaluationHistoryPage onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
+        <EvaluationHistoryPage evaluations={savedEvaluations} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
       ) : currentPage === 'summary' ? (
         <EvaluationSummaryPage
           totalScore={totalScore}
@@ -728,6 +817,7 @@ export default function GamalielApp() {
           structuralWeight={structuralWeight}
           vocalCadence={vocalCadence}
           postAnalysis={postAnalysis}
+          evaluator={{ type: evaluatorType, name: evaluatorType === 'ai' ? 'Gamaliel' : evaluatorName }}
           onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }}
           onNewEvaluation={handleNewEvaluation}
         />

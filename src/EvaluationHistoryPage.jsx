@@ -204,7 +204,7 @@ const EvaluationCard = ({ score, title, date, evaluator }) => (
 // MAIN PAGE COMPONENT
 // ============================================================================
 
-export default function EvaluationHistoryPage({ onBack }) {
+export default function EvaluationHistoryPage({ evaluations: supabaseEvals, onBack }) {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
@@ -222,10 +222,7 @@ export default function EvaluationHistoryPage({ onBack }) {
           <div className="max-w-7xl mx-auto relative flex flex-col items-center">
             <div className="w-full flex justify-end mb-12">
               <button onClick={onBack} className="history-back-btn group">
-                <span className="text-[12px] transition-transform group-hover:-translate-x-1">
-                  {'\u2B05\uFE0F'}
-                </span>
-                BACK TO DASHBOARD
+                <span className="text-[16px] transition-transform group-hover:-translate-x-1">⬅️</span>
               </button>
             </div>
             <div className="text-center">
@@ -245,11 +242,28 @@ export default function EvaluationHistoryPage({ onBack }) {
         {/* Evaluation Cards Grid */}
         <main className="max-w-7xl mx-auto px-6 pb-24 flex-grow w-full">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {EVALUATIONS.map((evaluation, index) => (
+            {(supabaseEvals && supabaseEvals.length > 0
+              ? supabaseEvals.map((ev) => ({
+                  score: String(ev.total_score),
+                  title: ev.sermon_title,
+                  date: new Date(ev.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase(),
+                  evaluator: { type: ev.evaluator_type, name: ev.evaluator_name },
+                }))
+              : EVALUATIONS
+            ).map((evaluation, index) => (
               <EvaluationCard key={index} {...evaluation} />
             ))}
           </div>
         </main>
+
+        {/* Footer */}
+        <footer className="border-t border-white/5 py-8">
+          <div className="text-center">
+            <p className="text-[8px] tracking-[0.5em] text-white/40 uppercase font-black">
+              © 2026 SCRIBE INC.
+            </p>
+          </div>
+        </footer>
       </div>
 
       {/* Scoped styles */}

@@ -186,7 +186,7 @@ export default function GlossaryPage({ scrollToTerm, onBack }) {
             onClick={onBack}
             className="text-[10px] font-bold tracking-[0.2em] text-white/60 hover:text-white transition-colors uppercase mb-8 inline-block"
           >
-            {'\u2190'} BACK TO SCORECARD
+            ⬅️
           </button>
           <h1
             className="text-5xl md:text-7xl font-robot font-black uppercase mb-6"
@@ -306,51 +306,11 @@ export default function GlossaryPage({ scrollToTerm, onBack }) {
         </main>
 
         {/* Footer */}
-        <footer
-          className="w-full py-4 mt-auto relative"
-          style={{
-            background: 'rgba(0, 0, 0, 0.05)',
-            backdropFilter: 'blur(12px) saturate(200%)',
-            WebkitBackdropFilter: 'blur(12px) saturate(200%)',
-          }}
-        >
-          {/* Top border gradient */}
-          <div
-            className="absolute top-0 left-0 right-0 h-px"
-            style={{
-              background: 'linear-gradient(90deg, #FF4500 0%, #D12D6F 50%, #C026D3 100%)',
-              opacity: 0.8,
-            }}
-          />
-          <div className="w-full px-6">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-8 h-8 rounded border border-white/20 flex items-center justify-center"
-                  style={{ background: 'linear-gradient(to bottom right, rgba(255,255,255,0.1), transparent)' }}
-                >
-                  <span className="text-lg font-serif italic font-bold text-white">S</span>
-                </div>
-                <div className="text-left">
-                  <span className="text-[12px] font-black tracking-[0.2em] uppercase text-white block leading-none">Scribe Inc.</span>
-                  <span className="text-[6px] tracking-[0.4em] text-white/40 uppercase font-black">Homiletics Division</span>
-                </div>
-              </div>
-              <div className="flex flex-col items-center flex-1">
-                <p className="text-primary font-robot text-[10px] font-bold tracking-[0.6em] uppercase cursor-default">
-                  WE FIX WHAT MARKETING CANNOT
-                </p>
-              </div>
-              <div className="flex items-center gap-6">
-                <p className="text-[8px] tracking-[0.5em] text-white/30 uppercase font-bold">
-                  {'\u00A9'} 2026 SCRIBE INC.
-                </p>
-                <div className="flex items-center gap-2 opacity-60">
-                  <div className="w-1 h-1 rounded-full bg-primary" style={{ boxShadow: '0 0 4px #FF4500' }}></div>
-                  <span className="text-white/60 text-[8px] font-black tracking-[0.2em] uppercase">Official Lexicon</span>
-                </div>
-              </div>
-            </div>
+        <footer className="w-full py-8 mt-auto border-t border-white/5">
+          <div className="w-full px-6 text-center">
+            <p className="text-[8px] tracking-[0.5em] text-white/40 uppercase font-black">
+              © 2026 SCRIBE INC.
+            </p>
           </div>
         </footer>
       </div>

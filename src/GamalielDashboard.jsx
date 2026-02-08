@@ -1,4 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import GlossaryPage from './GlossaryPage';
+import { analyzeSermon } from './services/claudeService';
+
+// ============================================================================
+// GLOSSARY TERM MAPPING (dashboard key → glossary card ID)
+// ============================================================================
+
+const GLOSSARY_TERM_MAP = {
+  theological_fidelity: 'fidelity',
+  exegetical_soundness: 'exegesis',
+  gospel_centrality: 'gospel-centrality',
+  relevancy: 'relevancy',
+  clarity: 'clarity',
+  connectivity: 'connectivity',
+  precision: 'precision',
+  call_to_action: 'call-to-action',
+  relatability: 'relatability',
+  pacing: 'pacing',
+  enthusiasm: 'enthusiasm',
+  charisma: 'charisma',
+};
 
 // ============================================================================
 // MOCK DATA & UTILITIES
@@ -38,7 +59,7 @@ const GlassCard = ({ children, className = '', isCircle = false, noHover = false
         background: 'rgba(255, 255, 255, 0.025)',
         backdropFilter: 'blur(16px) saturate(180%)',
         WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-        borderRadius: isCircle ? '50%' : '32px',
+        borderRadius: isCircle ? '50%' : '60px',
         transform: (!noHover && isHovered) ? 'translateY(-8px)' : 'translateY(0)',
         boxShadow: (!noHover && isHovered)
           ? '0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 69, 0, 0.15)'
@@ -52,7 +73,7 @@ const GlassCard = ({ children, className = '', isCircle = false, noHover = false
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          borderRadius: isCircle ? '50%' : '32px',
+          borderRadius: isCircle ? '50%' : '60px',
           padding: '1px',
           background: 'linear-gradient(135deg, #FF4500, #D12D6F, #8B008B)',
           mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
@@ -143,14 +164,23 @@ const Logo = ({ height = 28, opacity = 1 }) => (
 // DASHBOARD COMPONENTS
 // ============================================================================
 
-const SpectrumSlider = ({ label, value, onChange }) => {
+const SpectrumSlider = ({ label, value, onChange, onLabelClick }) => {
   const color = getSliderColor(value);
   const percentage = (value / 10) * 100;
 
   return (
     <div className="mb-4">
       <div className="flex justify-between items-end mb-2">
-        <label className="font-bold text-[10px] uppercase tracking-[0.2em] text-white">{label}</label>
+        <label className="font-bold text-[10px] uppercase tracking-[0.2em] text-white">
+          {onLabelClick ? (
+            <span
+              onClick={(e) => { e.preventDefault(); onLabelClick(); }}
+              className="cursor-pointer hover:text-[#FF4500] transition-colors border-b border-transparent hover:border-[#FF4500]/50"
+            >
+              {label}
+            </span>
+          ) : label}
+        </label>
         <span
           className="text-[10px] font-black font-mono transition-colors"
           style={{ color, filter: `drop-shadow(0 0 8px ${color})` }}
@@ -175,7 +205,7 @@ const SpectrumSlider = ({ label, value, onChange }) => {
   );
 };
 
-const CheckboxItem = ({ label, subtitle, checked, onToggle }) => (
+const CheckboxItem = ({ label, subtitle, checked, onToggle, onLabelClick }) => (
   <label className="flex items-center gap-3 cursor-pointer group">
     <div
       className={`relative flex-shrink-0 w-6 h-6 border flex items-center justify-center transition-all ${checked ? 'border-transparent bg-transparent' : 'border-white/20 bg-black/40 group-hover:border-orange-500/50'}`}
@@ -185,7 +215,16 @@ const CheckboxItem = ({ label, subtitle, checked, onToggle }) => (
       {checked && <span className="text-xl">{'\u2705'}</span>}
     </div>
     <div className="flex flex-col">
-      <span className="font-bold text-white text-xs tracking-tight uppercase">{label}</span>
+      <span className="font-bold text-white text-xs tracking-tight uppercase">
+        {onLabelClick ? (
+          <span
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLabelClick(); }}
+            className="cursor-pointer hover:text-[#FF4500] transition-colors border-b border-transparent hover:border-[#FF4500]/50"
+          >
+            {label}
+          </span>
+        ) : label}
+      </span>
       <span className="text-[8px] text-white/70 uppercase font-bold tracking-widest">{subtitle}</span>
     </div>
   </label>
@@ -370,9 +409,12 @@ const PostAnalysisCard = ({ emoji, emojiColor, label, labelColor, content }) => 
 // ============================================================================
 
 export default function GamalielApp() {
-  const [currentPage, setCurrentPage] = useState('dashboard'); // 'dashboard' | 'summary'
+  const [currentPage, setCurrentPage] = useState('dashboard'); // 'dashboard' | 'summary' | 'glossary'
+  const [glossaryTerm, setGlossaryTerm] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState('');
+  const [recordedFile, setRecordedFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   // Form state
   const [sermonTitle, setSermonTitle] = useState('');
@@ -417,53 +459,87 @@ export default function GamalielApp() {
   const totalScore = Object.values(structuralWeight).reduce((a, b) => a + b, 0) +
     Object.values(vocalCadence).reduce((a, b) => a + b, 0);
 
-  // Simulate Gamaliel AI Analysis
-  const handleGamalielAnalysis = async () => {
+  // Gamaliel AI Analysis - uses real Claude API when a file is uploaded
+  const runAnalysis = async (file) => {
     setIsAnalyzing(true);
 
-    // Simulate transcription
-    setAnalysisStatus('Recording sermon audio...');
-    await new Promise(r => setTimeout(r, 1500));
+    try {
+      setAnalysisStatus('Preparing sermon recording...');
+      await new Promise(r => setTimeout(r, 800));
 
-    setAnalysisStatus('Transcribing with AssemblyAI...');
-    await new Promise(r => setTimeout(r, 2000));
+      setAnalysisStatus('Analyzing with Gamaliel AI...');
 
-    setAnalysisStatus('Analyzing with Gamaliel AI...');
-    await new Promise(r => setTimeout(r, 2000));
+      const result = await analyzeSermon(file, {
+        title: sermonTitle,
+        goal: primaryGoal,
+        date: preachDate,
+      });
 
-    // Simulate AI filling in all fields
-    setSacredFoundation({
-      theological_fidelity: true,
-      exegetical_soundness: true,
-      gospel_centrality: true,
-    });
+      setAnalysisStatus('Processing results...');
+      await new Promise(r => setTimeout(r, 500));
 
-    setStructuralWeight({
-      relevancy: 8,
-      clarity: 9,
-      connectivity: 8,
-      precision: 8,
-      call_to_action: 9,
-    });
+      // Apply parsed scores from Claude's response
+      const s = result.scores;
+      setSacredFoundation({
+        theological_fidelity: s.theologicalFidelity ?? false,
+        exegetical_soundness: s.exegeticalSoundness ?? false,
+        gospel_centrality: s.gospelCentrality ?? false,
+      });
 
-    setVocalCadence({
-      relatability: 9,
-      pacing: 7,
-      enthusiasm: 9,
-      charisma: 8,
-    });
+      setStructuralWeight({
+        relevancy: s.relevancy ?? 0,
+        clarity: s.clarity ?? 0,
+        connectivity: s.connectivity ?? 0,
+        precision: s.precision ?? 0,
+        call_to_action: s.callToAction ?? 0,
+      });
 
-    setPostAnalysis({
-      anchoring_point: 'The transition into the third point maintained high engagement through a visceral metaphor that grounded abstract theology in lived experience.',
-      structural_drift: 'The middle section expanded too far into historical context, causing a brief loss of connection with practical audience application.',
-      measurable_step: 'Reduce historical preamble by 40% in the next sermon to preserve rhythmic momentum and maintain focus on application.',
-    });
+      setVocalCadence({
+        relatability: s.relatability ?? 0,
+        pacing: s.pacing ?? 0,
+        enthusiasm: s.enthusiasm ?? 0,
+        charisma: s.charisma ?? 0,
+      });
 
-    setAnalysisStatus('Analysis complete!');
+      // Extract post-analysis sections from the full analysis text
+      const analysis = result.fullAnalysis;
+      const anchoringMatch = analysis.match(/### Anchoring Point[^\n]*\n([\s\S]*?)(?=###|$)/i);
+      const driftMatch = analysis.match(/### Structural Drift[^\n]*\n([\s\S]*?)(?=###|$)/i);
+      const stepMatch = analysis.match(/### Measurable Step[^\n]*\n([\s\S]*?)(?=###|$)/i);
+
+      setPostAnalysis({
+        anchoring_point: anchoringMatch ? anchoringMatch[1].trim() : '',
+        structural_drift: driftMatch ? driftMatch[1].trim() : '',
+        measurable_step: stepMatch ? stepMatch[1].trim() : '',
+      });
+
+      setAnalysisStatus('Analysis complete!');
+    } catch (error) {
+      setAnalysisStatus(`Error: ${error.message}`);
+      await new Promise(r => setTimeout(r, 3000));
+    }
+
     await new Promise(r => setTimeout(r, 500));
-
     setIsAnalyzing(false);
     setAnalysisStatus('');
+  };
+
+  // Trigger file picker when AI Assistant button is clicked
+  const handleGamalielAnalysis = () => {
+    if (recordedFile) {
+      runAnalysis(recordedFile);
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
+  // Handle file selection for sermon upload
+  const handleFileSelected = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setRecordedFile(file);
+      runAnalysis(file);
+    }
   };
 
   // Handle Calculate Score - saves and navigates to summary
@@ -497,6 +573,12 @@ export default function GamalielApp() {
     window.scrollTo(0, 0);
   };
 
+  // Navigate to glossary, optionally scrolling to a specific term
+  const navigateToGlossary = (termKey) => {
+    setGlossaryTerm(termKey ? GLOSSARY_TERM_MAP[termKey] || null : null);
+    setCurrentPage('glossary');
+  };
+
   // ============================================================================
   // RENDER DASHBOARD PAGE
   // ============================================================================
@@ -507,7 +589,15 @@ export default function GamalielApp() {
       <header className="sticky top-0 z-50 border-b border-white/5 bg-[#070304]/80 backdrop-blur-2xl">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <Logo height={28} />
-          <GradientButton small>SAVE</GradientButton>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigateToGlossary()}
+              className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-[#FF4500] transition-colors uppercase"
+            >
+              LEXICON
+            </button>
+            <GradientButton small>SAVE</GradientButton>
+          </div>
         </div>
       </header>
 
@@ -552,6 +642,24 @@ export default function GamalielApp() {
                     Record your sermon (max 60 min). Gamaliel AI will transcribe and analyze automatically.
                   </p>
                 </div>
+
+                {/* Hidden file input for sermon upload */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="audio/*,video/*"
+                  onChange={handleFileSelected}
+                  className="hidden"
+                />
+
+                {/* Upload status indicator */}
+                {recordedFile && !isAnalyzing && (
+                  <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2">
+                    <span className="text-[9px] font-mono text-white/60">
+                      {'\uD83D\uDCC1'} {recordedFile.name}
+                    </span>
+                  </div>
+                )}
 
                 {/* Analysis Status */}
                 {isAnalyzing && (
@@ -623,9 +731,9 @@ export default function GamalielApp() {
           <SectionHeader number="1\uFE0F\u20E3" title="Sacred Foundation" />
           <GlassCard>
             <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <CheckboxItem label="Theological Fidelity" subtitle="Doctrinal accuracy" checked={sacredFoundation.theological_fidelity} onToggle={() => setSacredFoundation(p => ({...p, theological_fidelity: !p.theological_fidelity}))} />
-              <CheckboxItem label="Exegetical Soundness" subtitle="Contextual integrity" checked={sacredFoundation.exegetical_soundness} onToggle={() => setSacredFoundation(p => ({...p, exegetical_soundness: !p.exegetical_soundness}))} />
-              <CheckboxItem label="Gospel Centrality" subtitle="Christ-focused" checked={sacredFoundation.gospel_centrality} onToggle={() => setSacredFoundation(p => ({...p, gospel_centrality: !p.gospel_centrality}))} />
+              <CheckboxItem label="Theological Fidelity" subtitle="Doctrinal accuracy" checked={sacredFoundation.theological_fidelity} onToggle={() => setSacredFoundation(p => ({...p, theological_fidelity: !p.theological_fidelity}))} onLabelClick={() => navigateToGlossary('theological_fidelity')} />
+              <CheckboxItem label="Exegetical Soundness" subtitle="Contextual integrity" checked={sacredFoundation.exegetical_soundness} onToggle={() => setSacredFoundation(p => ({...p, exegetical_soundness: !p.exegetical_soundness}))} onLabelClick={() => navigateToGlossary('exegetical_soundness')} />
+              <CheckboxItem label="Gospel Centrality" subtitle="Christ-focused" checked={sacredFoundation.gospel_centrality} onToggle={() => setSacredFoundation(p => ({...p, gospel_centrality: !p.gospel_centrality}))} onLabelClick={() => navigateToGlossary('gospel_centrality')} />
             </div>
           </GlassCard>
         </section>
@@ -636,11 +744,11 @@ export default function GamalielApp() {
             <SectionHeader number="2\uFE0F\u20E3" title="Structural Weight" />
             <GlassCard>
               <div className="p-4">
-                <SpectrumSlider label="Relevancy" value={structuralWeight.relevancy} onChange={(v) => setStructuralWeight(p => ({...p, relevancy: v}))} />
-                <SpectrumSlider label="Clarity" value={structuralWeight.clarity} onChange={(v) => setStructuralWeight(p => ({...p, clarity: v}))} />
-                <SpectrumSlider label="Connectivity" value={structuralWeight.connectivity} onChange={(v) => setStructuralWeight(p => ({...p, connectivity: v}))} />
-                <SpectrumSlider label="Precision" value={structuralWeight.precision} onChange={(v) => setStructuralWeight(p => ({...p, precision: v}))} />
-                <SpectrumSlider label="Call to Action" value={structuralWeight.call_to_action} onChange={(v) => setStructuralWeight(p => ({...p, call_to_action: v}))} />
+                <SpectrumSlider label="Relevancy" value={structuralWeight.relevancy} onChange={(v) => setStructuralWeight(p => ({...p, relevancy: v}))} onLabelClick={() => navigateToGlossary('relevancy')} />
+                <SpectrumSlider label="Clarity" value={structuralWeight.clarity} onChange={(v) => setStructuralWeight(p => ({...p, clarity: v}))} onLabelClick={() => navigateToGlossary('clarity')} />
+                <SpectrumSlider label="Connectivity" value={structuralWeight.connectivity} onChange={(v) => setStructuralWeight(p => ({...p, connectivity: v}))} onLabelClick={() => navigateToGlossary('connectivity')} />
+                <SpectrumSlider label="Precision" value={structuralWeight.precision} onChange={(v) => setStructuralWeight(p => ({...p, precision: v}))} onLabelClick={() => navigateToGlossary('precision')} />
+                <SpectrumSlider label="Call to Action" value={structuralWeight.call_to_action} onChange={(v) => setStructuralWeight(p => ({...p, call_to_action: v}))} onLabelClick={() => navigateToGlossary('call_to_action')} />
               </div>
             </GlassCard>
           </section>
@@ -649,10 +757,10 @@ export default function GamalielApp() {
             <SectionHeader number="3\uFE0F\u20E3" title="Vocal Cadence" />
             <GlassCard>
               <div className="p-4">
-                <SpectrumSlider label="Relatability" value={vocalCadence.relatability} onChange={(v) => setVocalCadence(p => ({...p, relatability: v}))} />
-                <SpectrumSlider label="Pacing" value={vocalCadence.pacing} onChange={(v) => setVocalCadence(p => ({...p, pacing: v}))} />
-                <SpectrumSlider label="Enthusiasm" value={vocalCadence.enthusiasm} onChange={(v) => setVocalCadence(p => ({...p, enthusiasm: v}))} />
-                <SpectrumSlider label="Charisma" value={vocalCadence.charisma} onChange={(v) => setVocalCadence(p => ({...p, charisma: v}))} />
+                <SpectrumSlider label="Relatability" value={vocalCadence.relatability} onChange={(v) => setVocalCadence(p => ({...p, relatability: v}))} onLabelClick={() => navigateToGlossary('relatability')} />
+                <SpectrumSlider label="Pacing" value={vocalCadence.pacing} onChange={(v) => setVocalCadence(p => ({...p, pacing: v}))} onLabelClick={() => navigateToGlossary('pacing')} />
+                <SpectrumSlider label="Enthusiasm" value={vocalCadence.enthusiasm} onChange={(v) => setVocalCadence(p => ({...p, enthusiasm: v}))} onLabelClick={() => navigateToGlossary('enthusiasm')} />
+                <SpectrumSlider label="Charisma" value={vocalCadence.charisma} onChange={(v) => setVocalCadence(p => ({...p, charisma: v}))} onLabelClick={() => navigateToGlossary('charisma')} />
                 <div className="h-[52px]"></div>
               </div>
             </GlassCard>
@@ -837,7 +945,12 @@ export default function GamalielApp() {
     <div className="min-h-screen text-white font-sans selection:bg-orange-500/30" style={{
       background: `radial-gradient(circle at 10% 10%, rgba(255, 69, 0, 0.12) 0%, transparent 40%), radial-gradient(circle at 90% 90%, rgba(139, 0, 139, 0.12) 0%, transparent 40%), radial-gradient(circle at 50% 50%, rgba(57, 255, 20, 0.02) 0%, transparent 50%), #070304`
     }}>
-      {currentPage === 'dashboard' ? renderDashboard() : renderSummary()}
+      {currentPage === 'glossary'
+        ? <GlossaryPage scrollToTerm={glossaryTerm} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
+        : currentPage === 'summary'
+          ? renderSummary()
+          : renderDashboard()
+      }
 
       {/* Custom styles */}
       <style>{`

@@ -128,7 +128,7 @@ export async function analyzeSermon(mediaFile, context = {}) {
 
   // Build the request body
   const requestBody = {
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-5-20250929',
     max_tokens: 4096,
     system: GAMALIEL_SYSTEM_PROMPT,
     messages: [

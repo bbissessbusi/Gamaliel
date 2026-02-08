@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import GlossaryPage from './GlossaryPage';
+import EvaluationHistoryPage from './EvaluationHistoryPage';
+import EvaluationSummaryPage from './EvaluationSummaryPage';
 import { analyzeSermon } from './services/claudeService';
 
 // ============================================================================
@@ -31,17 +33,6 @@ const getSliderColor = (value) => {
   const g = Math.round(69 - (value * 69 / 10));
   const b = Math.round(0 + (value * 139 / 10));
   return `rgb(${r}, ${g}, ${b})`;
-};
-
-// Get score color based on total (0-90)
-const getScoreTheme = (score) => {
-  if (score >= 80) {
-    return { color: '#8B008B', gradient: 'linear-gradient(135deg, #8B008B 0%, #6B006B 100%)', emoji: '\u{1F451}' };
-  } else if (score >= 50) {
-    return { color: '#D12D6F', gradient: 'linear-gradient(135deg, #D12D6F 0%, #A11D5F 100%)', emoji: '' };
-  } else {
-    return { color: '#FF4500', gradient: 'linear-gradient(135deg, #FF4500 0%, #CC3700 100%)', emoji: '' };
-  }
 };
 
 // ============================================================================
@@ -300,116 +291,11 @@ const AIPulse = () => {
 };
 
 // ============================================================================
-// EVALUATION SUMMARY COMPONENTS
-// ============================================================================
-
-const ScoreCircle = ({ score, maxScore = 90, isAnimating }) => {
-  const theme = getScoreTheme(score);
-  const [showContent, setShowContent] = useState(false);
-
-  useEffect(() => {
-    if (isAnimating) {
-      const timer = setTimeout(() => setShowContent(true), 3800);
-      return () => clearTimeout(timer);
-    } else {
-      setShowContent(true);
-    }
-  }, [isAnimating]);
-
-  return (
-    <div
-      className={`relative w-56 h-56 md:w-64 md:h-64 flex items-center justify-center ${isAnimating ? 'animate-spin-coin' : ''}`}
-      style={{
-        background: 'rgba(255, 255, 255, 0.02)',
-        backdropFilter: 'blur(24px)',
-        borderRadius: '20px',
-        boxShadow: `0 0 60px ${theme.color}33`,
-      }}
-    >
-      {/* Gradient border */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          borderRadius: '20px',
-          padding: '1.5px',
-          background: `linear-gradient(135deg, #FF4500, #D12D6F, ${theme.color})`,
-          mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-          WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-          maskComposite: 'exclude',
-          WebkitMaskComposite: 'xor',
-          opacity: 0.6
-        }}
-      />
-      {/* Glints */}
-      <div className="absolute top-0 left-[10%] right-[10%] h-[1px]" style={{
-        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent)'
-      }} />
-      <div className="absolute top-0 bottom-0 left-0 w-[1px]" style={{
-        background: 'linear-gradient(180deg, transparent, rgba(255,255,255,0.4), transparent)'
-      }} />
-
-      {/* Content */}
-      <div className={`flex flex-col items-center transition-all duration-500 ${showContent ? 'opacity-100 scale-100' : 'opacity-0 scale-80'}`}>
-        <span className="text-[10px] font-black tracking-[0.4em] uppercase text-white/40 mb-2">Final Tally</span>
-        <div className="flex items-center gap-2">
-          {theme.emoji && <span className="text-4xl">{theme.emoji}</span>}
-          <span className="text-6xl md:text-7xl font-black text-white font-mono">
-            {score}<span style={{ color: `${theme.color}60` }}>/</span>{maxScore}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ScoreBar = ({ label, score, maxScore = 10 }) => {
-  const percentage = (score / maxScore) * 100;
-
-  return (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex justify-between text-[9px] font-bold uppercase tracking-[0.2em] text-white/80">
-        <span>{label}</span>
-        <span className="text-[#FF4500] font-mono">{String(score).padStart(2, '0')}/{maxScore}</span>
-      </div>
-      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-        <div
-          className="h-full transition-all duration-1000 ease-out"
-          style={{
-            width: `${percentage}%`,
-            background: 'linear-gradient(90deg, #FF4500 0%, #D12D6F 100%)'
-          }}
-        />
-      </div>
-    </div>
-  );
-};
-
-const FoundationItem = ({ label, checked }) => (
-  <li className="flex items-center gap-3">
-    <div className="w-5 h-5 flex items-center justify-center">
-      <span className="text-[12px]">{checked ? '\u2705' : '\u274C'}</span>
-    </div>
-    <span className="text-[10px] font-bold uppercase tracking-widest text-white/90">{label}</span>
-  </li>
-);
-
-const PostAnalysisCard = ({ emoji, emojiColor, label, labelColor, content }) => (
-  <GlassCard className="p-6 md:p-8 h-full">
-    <div className="flex flex-col gap-4 h-full">
-      <label className="text-[9px] font-black tracking-[0.4em] uppercase flex items-center gap-2.5" style={{ color: labelColor }}>
-        <span style={{ color: emojiColor }}>{emoji}</span> {label}
-      </label>
-      <p className="text-[11px] leading-relaxed text-white/80 font-light">{content}</p>
-    </div>
-  </GlassCard>
-);
-
-// ============================================================================
 // MAIN APP WITH PAGE NAVIGATION
 // ============================================================================
 
 export default function GamalielApp() {
-  const [currentPage, setCurrentPage] = useState('dashboard'); // 'dashboard' | 'summary' | 'glossary'
+  const [currentPage, setCurrentPage] = useState('dashboard'); // 'dashboard' | 'summary' | 'glossary' | 'history'
   const [glossaryTerm, setGlossaryTerm] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState('');
@@ -590,6 +476,12 @@ export default function GamalielApp() {
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <Logo height={28} />
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => { setCurrentPage('history'); }}
+              className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-[#FF4500] transition-colors uppercase"
+            >
+              HISTORY
+            </button>
             <button
               onClick={() => navigateToGlossary()}
               className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-[#FF4500] transition-colors uppercase"
@@ -815,127 +707,7 @@ export default function GamalielApp() {
     </>
   );
 
-  // ============================================================================
-  // RENDER EVALUATION SUMMARY PAGE
-  // ============================================================================
-
-  const renderSummary = () => {
-    const theme = getScoreTheme(totalScore);
-
-    return (
-      <>
-        {/* Header */}
-        <header className="sticky top-0 z-50 border-b border-white/5 bg-[#070304]/80 backdrop-blur-2xl">
-          <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-            <Logo height={28} />
-            <button
-              onClick={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }}
-              className="text-[10px] font-bold tracking-[0.2em] text-white/60 hover:text-white transition-colors uppercase"
-            >
-              {'\u2190'} BACK
-            </button>
-          </div>
-        </header>
-
-        <main className="max-w-5xl mx-auto px-6 py-12 md:py-20 space-y-16">
-          {/* Score Circle Section */}
-          <section className="flex flex-col items-center text-center space-y-8">
-            <h1 className="text-[10px] md:text-xs font-mono font-bold tracking-[0.8em] uppercase" style={{ color: '#FF4500' }}>
-              Evaluation Summary
-            </h1>
-            <ScoreCircle score={totalScore} isAnimating={true} />
-          </section>
-
-          {/* Scores Breakdown */}
-          <section>
-            <GlassCard className="p-8 md:p-12">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-                {/* Sacred Foundation */}
-                <div className="space-y-6">
-                  <h3 className="text-[10px] font-black tracking-[0.5em] uppercase border-b border-white/5 pb-4" style={{ color: '#8B008B' }}>
-                    Sacred Foundation
-                  </h3>
-                  <ul className="space-y-4">
-                    <FoundationItem label="Theological Fidelity" checked={sacredFoundation.theological_fidelity} />
-                    <FoundationItem label="Exegetical Soundness" checked={sacredFoundation.exegetical_soundness} />
-                    <FoundationItem label="Gospel Centrality" checked={sacredFoundation.gospel_centrality} />
-                  </ul>
-                </div>
-
-                {/* Structural Weight */}
-                <div className="space-y-6">
-                  <h3 className="text-[10px] font-black tracking-[0.5em] uppercase border-b border-white/5 pb-4" style={{ color: '#8B008B' }}>
-                    Structural Weight
-                  </h3>
-                  <div className="space-y-5">
-                    <ScoreBar label="Relevancy" score={structuralWeight.relevancy} />
-                    <ScoreBar label="Clarity" score={structuralWeight.clarity} />
-                    <ScoreBar label="Connectivity" score={structuralWeight.connectivity} />
-                    <ScoreBar label="Precision" score={structuralWeight.precision} />
-                    <ScoreBar label="Call to Action" score={structuralWeight.call_to_action} />
-                  </div>
-                </div>
-
-                {/* Vocal Cadence */}
-                <div className="space-y-6">
-                  <h3 className="text-[10px] font-black tracking-[0.5em] uppercase border-b border-white/5 pb-4" style={{ color: '#8B008B' }}>
-                    Vocal Cadence
-                  </h3>
-                  <div className="space-y-5">
-                    <ScoreBar label="Relatability" score={vocalCadence.relatability} />
-                    <ScoreBar label="Pacing" score={vocalCadence.pacing} />
-                    <ScoreBar label="Enthusiasm" score={vocalCadence.enthusiasm} />
-                    <ScoreBar label="Charisma" score={vocalCadence.charisma} />
-                  </div>
-                </div>
-              </div>
-            </GlassCard>
-          </section>
-
-          {/* Post-Evaluation Analysis */}
-          <section className="space-y-6">
-            <h3 className="text-[10px] font-black text-center tracking-[0.6em] uppercase text-white/30">
-              Post-Evaluation Analysis
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <PostAnalysisCard
-                emoji={'\u26A1'} emojiColor="#F59E0B"
-                label="Anchoring Point" labelColor="#FF4500"
-                content={postAnalysis.anchoring_point || 'No anchoring point recorded.'}
-              />
-              <PostAnalysisCard
-                emoji={'\uD83D\uDCC9'} emojiColor="#3B82F6"
-                label="Structural Drift" labelColor="#D12D6F"
-                content={postAnalysis.structural_drift || 'No structural drift identified.'}
-              />
-              <PostAnalysisCard
-                emoji={'\u2705'} emojiColor="#10B981"
-                label="Measurable Step" labelColor="#8B008B"
-                content={postAnalysis.measurable_step || 'No measurable step recorded.'}
-              />
-            </div>
-          </section>
-
-          {/* New Evaluation Button */}
-          <section className="flex justify-center pt-4">
-            <GradientButton onClick={handleNewEvaluation} className="px-16 py-6">
-              Start a New Evaluation
-            </GradientButton>
-          </section>
-        </main>
-
-        {/* Footer */}
-        <footer className="py-16 mt-16 border-t border-white/5">
-          <div className="max-w-5xl mx-auto px-6 text-center space-y-6">
-            <Logo height={24} opacity={0.4} />
-            <p className="text-[8px] tracking-[0.8em] text-white/20 uppercase font-black">
-              {'\u00A9'} 2026 THE SCRIBES INC. {'\u2022'} WE FIX WHAT MARKETING CANNOT
-            </p>
-          </div>
-        </footer>
-      </>
-    );
-  };
+  // renderSummary is now handled by EvaluationSummaryPage component
 
   // ============================================================================
   // MAIN RENDER
@@ -945,12 +717,23 @@ export default function GamalielApp() {
     <div className="min-h-screen text-white font-sans selection:bg-orange-500/30" style={{
       background: `radial-gradient(circle at 10% 10%, rgba(255, 69, 0, 0.12) 0%, transparent 40%), radial-gradient(circle at 90% 90%, rgba(139, 0, 139, 0.12) 0%, transparent 40%), radial-gradient(circle at 50% 50%, rgba(57, 255, 20, 0.02) 0%, transparent 50%), #070304`
     }}>
-      {currentPage === 'glossary'
-        ? <GlossaryPage scrollToTerm={glossaryTerm} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
-        : currentPage === 'summary'
-          ? renderSummary()
-          : renderDashboard()
-      }
+      {currentPage === 'glossary' ? (
+        <GlossaryPage scrollToTerm={glossaryTerm} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
+      ) : currentPage === 'history' ? (
+        <EvaluationHistoryPage onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
+      ) : currentPage === 'summary' ? (
+        <EvaluationSummaryPage
+          totalScore={totalScore}
+          sacredFoundation={sacredFoundation}
+          structuralWeight={structuralWeight}
+          vocalCadence={vocalCadence}
+          postAnalysis={postAnalysis}
+          onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }}
+          onNewEvaluation={handleNewEvaluation}
+        />
+      ) : (
+        renderDashboard()
+      )}
 
       {/* Custom styles */}
       <style>{`

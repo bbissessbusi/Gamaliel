@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Logo from './components/Logo';
 
 // ============================================================================
 // SCORE THEME HELPER
@@ -141,17 +142,14 @@ export default function EvaluationSummaryPage({
       }}
     >
       {/* Sticky Header */}
-      <header className="sticky top-0 z-[100] border-b border-white/5 backdrop-blur-2xl" style={{ background: 'rgba(7, 3, 4, 0.8)' }}>
-        <div className="max-w-7xl mx-auto px-6 h-16 md:h-20 flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xl md:text-3xl font-serif italic font-bold">SI</span>
-            <div className="h-4 md:h-6 w-px bg-white/20 mx-1 md:mx-2" />
-            <span className="text-[8px] md:text-xs font-black tracking-[0.4em] uppercase">Scribe Inc.</span>
-          </div>
-          <nav className="flex items-center gap-8">
+      <header className="sticky top-0 z-[100] border-b border-white/5 backdrop-blur-2xl" style={{ background: 'rgba(7, 3, 4, 0.8)', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        <div className="max-w-7xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between">
+          <Logo height={28} />
+          <nav className="flex items-center gap-4 md:gap-8">
             <button
               onClick={onBack}
               className="text-[10px] font-bold tracking-[0.2em] text-white/60 hover:text-white transition-colors uppercase"
+              style={{ minHeight: '44px', display: 'flex', alignItems: 'center' }}
             >
               HOME
             </button>
@@ -162,7 +160,7 @@ export default function EvaluationSummaryPage({
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-12 md:py-20 space-y-20">
+      <main className="max-w-5xl mx-auto px-4 md:px-6 py-8 md:py-20 space-y-12 md:space-y-20">
         {/* Score Circle Section */}
         <section className="flex flex-col items-center text-center space-y-10">
           <div className="space-y-6">
@@ -215,7 +213,7 @@ export default function EvaluationSummaryPage({
             <div className="summary-glass-glint" />
             <div className="summary-glass-glint-side" />
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative" style={{ zIndex: 5 }}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12 relative" style={{ zIndex: 5 }}>
               {/* Sacred Foundation */}
               <div className="space-y-8">
                 <h3 className="text-[10px] font-black tracking-[0.5em] uppercase border-b border-white/5 pb-4" style={{ color: '#8B008B' }}>
@@ -263,7 +261,7 @@ export default function EvaluationSummaryPage({
           <h3 className="text-[10px] font-black text-center tracking-[0.6em] uppercase text-white/30">
             Post-Evaluation Analysis
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8">
             <PostAnalysisCard
               emoji="⚡"
               label={{ text: 'Prime Resonance', color: '#FF4500' }}
@@ -296,7 +294,7 @@ export default function EvaluationSummaryPage({
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-white/5 py-8 mt-12">
+      <footer className="border-t border-white/5 py-8 mt-12" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
         <div className="max-w-7xl mx-auto px-6 text-center">
           <p className="text-[8px] md:text-[9px] tracking-[0.8em] text-white/40 uppercase font-black">
             © 2026 SCRIBE INC.

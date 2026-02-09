@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import Logo from './components/Logo';
 
 // ============================================================================
 // WAVE CANVAS BACKGROUND
@@ -120,15 +121,15 @@ const WavesCanvas = () => {
 // ============================================================================
 
 const GlossaryCard = ({ id, title, etymology, application }) => (
-  <div id={id} className="glossary-glass-card glossary-glass-card-outline p-8">
+  <div id={id} className="glossary-glass-card glossary-glass-card-outline p-6 md:p-8">
     <div className="glossary-linear-specular"></div>
     <div className="relative" style={{ zIndex: 40 }}>
-      <h3 className="text-base font-robot font-bold text-white mb-5 uppercase tracking-widest transition-all duration-300">{title}</h3>
-      <div className="text-white text-[12px] leading-[1.6] font-light">
-        <p className="italic text-white/60 mb-3 text-[10px] uppercase tracking-wider">{etymology}</p>
+      <h3 className="text-sm md:text-base font-robot font-bold text-white mb-4 md:mb-5 uppercase tracking-widest transition-all duration-300">{title}</h3>
+      <div className="text-white text-[11px] md:text-[12px] leading-[1.6] font-light">
+        <p className="italic text-white/60 mb-3 text-[9px] md:text-[10px] uppercase tracking-wider">{etymology}</p>
         <div className="space-y-3">
           <div>
-            <span className="text-white/50 font-robot text-[9px] uppercase tracking-widest font-bold block mb-1">Application</span>
+            <span className="text-white/50 font-robot text-[8px] md:text-[9px] uppercase tracking-widest font-bold block mb-1">Application</span>
             <p>{application}</p>
           </div>
         </div>
@@ -142,8 +143,8 @@ const GlossaryCard = ({ id, title, etymology, application }) => (
 // ============================================================================
 
 const SectionDivider = ({ number, title }) => (
-  <div className="flex items-center gap-8">
-    <h2 className="text-[11px] font-black font-robot tracking-[0.5em] uppercase text-reddish-purple shrink-0 drop-shadow-sm">
+  <div className="flex items-center gap-4 md:gap-8">
+    <h2 className="text-[10px] md:text-[11px] font-black font-robot tracking-[0.5em] uppercase text-reddish-purple shrink-0 drop-shadow-sm">
       {number}. {title}
     </h2>
     <span className="h-px flex-1 bg-gradient-to-r from-reddish-purple/60 via-reddish-purple/20 to-transparent"></span>
@@ -179,19 +180,25 @@ export default function GlossaryPage({ scrollToTerm, onBack }) {
       <WavesCanvas />
 
       <div className="relative flex flex-col min-h-screen" style={{ zIndex: 10 }}>
-        {/* Header */}
-        <header className="py-20 md:py-32 text-center px-4 max-w-4xl mx-auto">
-          {/* Back navigation */}
-          <button
-            onClick={onBack}
-            className="text-[10px] font-bold tracking-[0.2em] text-white/60 hover:text-white transition-colors uppercase mb-8 inline-block"
-          >
-            ⬅️
-          </button>
+        {/* Header with Logo and Back Button */}
+        <header className="sticky top-0 z-50 border-b border-white/5 backdrop-blur-2xl" style={{ background: 'rgba(0, 0, 0, 0.8)', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+          <div className="max-w-7xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between">
+            <Logo height={28} />
+            <button
+              onClick={onBack}
+              className="glossary-back-btn group"
+            >
+              <span className="text-[16px] transition-transform group-hover:-translate-x-1">⬅️</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Title Section */}
+        <div className="py-12 md:py-20 text-center px-4 max-w-4xl mx-auto">
           <h1
-            className="text-5xl md:text-7xl font-robot font-black uppercase mb-6"
+            className="text-3xl sm:text-5xl md:text-7xl font-robot font-black uppercase mb-4 md:mb-6"
             style={{
-              letterSpacing: '0.25em',
+              letterSpacing: '0.15em',
               background: 'linear-gradient(to bottom, #FF4500 0%, #D12D6F 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
@@ -199,16 +206,16 @@ export default function GlossaryPage({ scrollToTerm, onBack }) {
           >
             Refined Lexicon
           </h1>
-          <p className="text-white/60 text-xs md:text-sm font-medium tracking-[0.1em] max-w-2xl mx-auto leading-relaxed drop-shadow-lg">
+          <p className="text-white/60 text-[11px] md:text-sm font-medium tracking-[0.1em] max-w-2xl mx-auto leading-relaxed drop-shadow-lg">
             The authoritative glossary of Homiletic Excellence for Scribe Inc. Each term defines a critical dimension of the Sacred Scorecard.
           </p>
-        </header>
+        </div>
 
-        <main className="max-w-7xl mx-auto px-6 space-y-24 flex-grow mb-32">
+        <main className="max-w-7xl mx-auto px-4 md:px-6 space-y-16 md:space-y-24 flex-grow mb-20 md:mb-32">
           {/* I. The Sacred Foundation */}
-          <section className="space-y-10">
+          <section className="space-y-6 md:space-y-10">
             <SectionDivider number="I" title="The Sacred Foundation" />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
               <GlossaryCard
                 id="fidelity"
                 title="Fidelity"
@@ -231,9 +238,9 @@ export default function GlossaryPage({ scrollToTerm, onBack }) {
           </section>
 
           {/* II. Message Architecture */}
-          <section className="space-y-10">
+          <section className="space-y-6 md:space-y-10">
             <SectionDivider number="II" title="Message Architecture" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               <GlossaryCard
                 id="relevancy"
                 title="Relevancy"
@@ -268,9 +275,9 @@ export default function GlossaryPage({ scrollToTerm, onBack }) {
           </section>
 
           {/* III. Delivery & Connection */}
-          <section className="space-y-10">
+          <section className="space-y-6 md:space-y-10">
             <SectionDivider number="III" title="Delivery &amp; Connection" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               <GlossaryCard
                 id="relatability"
                 title="Relatability"
@@ -306,7 +313,7 @@ export default function GlossaryPage({ scrollToTerm, onBack }) {
         </main>
 
         {/* Footer */}
-        <footer className="w-full py-8 mt-auto border-t border-white/5">
+        <footer className="w-full py-8 mt-auto border-t border-white/5" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
           <div className="w-full px-6 text-center">
             <p className="text-[8px] tracking-[0.5em] text-white/40 uppercase font-black">
               © 2026 SCRIBE INC.
@@ -330,6 +337,14 @@ export default function GlossaryPage({ scrollToTerm, onBack }) {
         .glossary-glass-card:hover {
           transform: translateY(-4px);
           background: rgba(255, 255, 255, 0.08);
+        }
+        @media (hover: none) {
+          .glossary-glass-card:hover {
+            transform: none;
+          }
+          .glossary-glass-card:active {
+            transform: scale(0.98);
+          }
         }
         .glossary-glass-card-outline {
           position: relative;
@@ -362,6 +377,28 @@ export default function GlossaryPage({ scrollToTerm, onBack }) {
           top: 0; left: 10%; right: 10%; height: 1px;
           background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.05), transparent);
           filter: blur(0.5px);
+        }
+        .glossary-back-btn {
+          padding: 10px 16px;
+          border-radius: 9999px;
+          font-size: 10px;
+          font-weight: 700;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          transition: all 0.3s ease;
+          color: white;
+          cursor: pointer;
+          min-width: 44px;
+          min-height: 44px;
+          justify-content: center;
+        }
+        .glossary-back-btn:hover {
+          background: rgba(255, 255, 255, 0.12);
+          border-color: rgba(255, 255, 255, 0.2);
         }
         .glossary-highlight {
           animation: glossary-highlight-pulse 2s ease-out;

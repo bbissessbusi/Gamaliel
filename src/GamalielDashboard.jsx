@@ -3,6 +3,7 @@ import GlossaryPage from './GlossaryPage';
 import EvaluationHistoryPage from './EvaluationHistoryPage';
 import EvaluationSummaryPage from './EvaluationSummaryPage';
 import GuidedTourPage from './GuidedTourPage';
+import Logo from './components/Logo';
 import { analyzeSermon } from './services/claudeService';
 import { saveEvaluation, getEvaluations } from './services/supabaseService';
 
@@ -135,17 +136,7 @@ const GradientButton = ({ children, onClick, className = '', small = false, disa
   );
 };
 
-// Logo component using PNG
-const Logo = ({ height = 28, opacity = 1 }) => (
-  <div style={{ height: `${height}px`, opacity, display: 'flex', alignItems: 'center', gap: '8px' }}>
-    <img
-      src="/Applogo.png"
-      alt="Gamaliel"
-      style={{ height: `${height}px`, objectFit: 'contain' }}
-    />
-    <span style={{ fontSize: '8px', fontWeight: 900, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.6)' }}>GAMALIEL</span>
-  </div>
-);
+// Logo imported from shared component
 
 // ============================================================================
 // DASHBOARD COMPONENTS
@@ -495,7 +486,7 @@ export default function GamalielApp() {
   const renderDashboard = () => (
     <>
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-white/5 bg-[#070304]/80 backdrop-blur-2xl">
+      <header className="sticky top-0 z-50 border-b border-white/5 bg-[#070304]/80 backdrop-blur-2xl safe-top">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <Logo height={28} />
           <div className="flex items-center gap-3">
@@ -541,7 +532,7 @@ export default function GamalielApp() {
 
         {/* Sermon Info Card */}
         <GlassCard className="mb-6">
-          <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="px-8 py-6 grid grid-cols-1 md:grid-cols-3 gap-4">
             <InputField label="Sermon Title/Text" emoji="📖" placeholder="e.g. Romans 8:1-4" value={sermonTitle} onChange={(e) => setSermonTitle(e.target.value)} />
             <InputField label="Preach Date" emoji="📅" type="date" value={preachDate} onChange={(e) => setPreachDate(e.target.value)} />
             <InputField label="Primary Goal" emoji="🎯" placeholder="The core objective" value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)} />
@@ -552,7 +543,7 @@ export default function GamalielApp() {
         <section className="mb-6">
           <SectionHeader emoji="📹" title="Digital Capture" />
           <GlassCard>
-            <div className="p-5">
+            <div className="px-8 py-6">
               <div className="flex flex-col gap-4">
                 <div>
                   <h4 className="text-sm font-bold tracking-tight uppercase" style={{
@@ -651,7 +642,7 @@ export default function GamalielApp() {
         <section className="mb-6">
           <SectionHeader number="1️⃣" title="Sacred Foundation" />
           <GlassCard>
-            <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="px-8 py-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <CheckboxItem label="Theological Fidelity" subtitle="Doctrinal accuracy" checked={sacredFoundation.theological_fidelity} onToggle={() => setSacredFoundation(p => ({...p, theological_fidelity: !p.theological_fidelity}))} onLabelClick={() => navigateToGlossary('theological_fidelity')} />
               <CheckboxItem label="Exegetical Soundness" subtitle="Contextual integrity" checked={sacredFoundation.exegetical_soundness} onToggle={() => setSacredFoundation(p => ({...p, exegetical_soundness: !p.exegetical_soundness}))} onLabelClick={() => navigateToGlossary('exegetical_soundness')} />
               <CheckboxItem label="Gospel Centrality" subtitle="Christ-focused" checked={sacredFoundation.gospel_centrality} onToggle={() => setSacredFoundation(p => ({...p, gospel_centrality: !p.gospel_centrality}))} onLabelClick={() => navigateToGlossary('gospel_centrality')} />
@@ -660,11 +651,11 @@ export default function GamalielApp() {
         </section>
 
         {/* Sections 2 & 3 Side by Side */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <section className="min-w-0">
             <SectionHeader number="2️⃣" title="Structural Weight" />
             <GlassCard>
-              <div className="p-4">
+              <div className="px-8 py-6">
                 <SpectrumSlider label="Relevancy" value={structuralWeight.relevancy} onChange={(v) => setStructuralWeight(p => ({...p, relevancy: v}))} onLabelClick={() => navigateToGlossary('relevancy')} />
                 <SpectrumSlider label="Clarity" value={structuralWeight.clarity} onChange={(v) => setStructuralWeight(p => ({...p, clarity: v}))} onLabelClick={() => navigateToGlossary('clarity')} />
                 <SpectrumSlider label="Connectivity" value={structuralWeight.connectivity} onChange={(v) => setStructuralWeight(p => ({...p, connectivity: v}))} onLabelClick={() => navigateToGlossary('connectivity')} />
@@ -677,7 +668,7 @@ export default function GamalielApp() {
           <section className="min-w-0">
             <SectionHeader number="3️⃣" title="Vocal Cadence" />
             <GlassCard>
-              <div className="p-4">
+              <div className="px-8 py-6">
                 <SpectrumSlider label="Relatability" value={vocalCadence.relatability} onChange={(v) => setVocalCadence(p => ({...p, relatability: v}))} onLabelClick={() => navigateToGlossary('relatability')} />
                 <SpectrumSlider label="Pacing" value={vocalCadence.pacing} onChange={(v) => setVocalCadence(p => ({...p, pacing: v}))} onLabelClick={() => navigateToGlossary('pacing')} />
                 <SpectrumSlider label="Enthusiasm" value={vocalCadence.enthusiasm} onChange={(v) => setVocalCadence(p => ({...p, enthusiasm: v}))} onLabelClick={() => navigateToGlossary('enthusiasm')} />
@@ -701,7 +692,7 @@ export default function GamalielApp() {
               { emoji: '✅', color: '#10B981', label: 'Measurable Step', key: 'measurable_step', placeholder: 'Improvement task...' },
             ].map((item) => (
               <GlassCard key={item.key} className="h-full">
-                <div className="p-4 h-full flex flex-col">
+                <div className="px-6 py-5 h-full flex flex-col">
                   <label className="text-[8px] font-black text-white tracking-[0.3em] uppercase flex items-center gap-1 mb-2">
                     <span style={{ color: item.color }}>{item.emoji}</span> {item.label}
                   </label>
@@ -726,7 +717,7 @@ export default function GamalielApp() {
           {/* Evaluator Signature */}
           <div className="mt-8 w-full max-w-md">
             <GlassCard>
-              <div className="p-5 space-y-4">
+              <div className="px-8 py-6 space-y-4">
                 <label className="text-[8px] font-black text-white tracking-[0.3em] uppercase text-center block">
                   Evaluator Signature
                 </label>
@@ -789,7 +780,7 @@ export default function GamalielApp() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-white/5 py-8 bg-black/40">
+      <footer className="border-t border-white/5 py-8 bg-black/40 safe-bottom">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <p className="text-[8px] tracking-[0.5em] text-white/50 uppercase font-black">© 2026 SCRIBE INC.</p>
         </div>
@@ -861,6 +852,42 @@ export default function GamalielApp() {
         }
         .animate-spin-coin {
           animation: spin-coin 4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        /* iOS safe area support */
+        .safe-top { padding-top: env(safe-area-inset-top, 0px); }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+        .safe-left { padding-left: env(safe-area-inset-left, 0px); }
+        .safe-right { padding-right: env(safe-area-inset-right, 0px); }
+
+        /* Mobile touch optimizations */
+        * { -webkit-tap-highlight-color: transparent; }
+        button, [role="button"], input[type="range"] {
+          touch-action: manipulation;
+        }
+
+        /* Prevent iOS auto-zoom on input focus (font-size < 16px triggers zoom) */
+        @media screen and (max-width: 768px) {
+          input[type="text"],
+          input[type="date"],
+          input[type="email"],
+          input[type="password"],
+          textarea,
+          select {
+            font-size: 16px !important;
+          }
+        }
+
+        /* Mobile-friendly slider thumb */
+        @media (pointer: coarse) {
+          input[type="range"]::-webkit-slider-thumb {
+            width: 24px;
+            height: 24px;
+          }
+          input[type="range"]::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+          }
         }
       `}</style>
     </div>

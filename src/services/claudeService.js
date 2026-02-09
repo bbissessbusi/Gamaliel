@@ -63,7 +63,6 @@ async function fileToBase64(file) {
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = () => {
-      // Remove the data URL prefix (e.g., "data:audio/mp3;base64,")
       const base64 = reader.result.split(',')[1];
       resolve(base64);
     };
@@ -75,58 +74,81 @@ async function fileToBase64(file) {
  * Get the media type string for Claude API
  */
 function getMediaType(file) {
-  const type = file.type;
+  return file.type || 'audio/mpeg';
+}
 
-  // Audio types
-  if (type.startsWith('audio/')) {
-    return type; // e.g., "audio/mp3", "audio/wav", "audio/m4a"
+/**
+ * Send request to Claude API, trying the Vercel proxy first, then falling back to direct call
+ */
+async function callClaudeAPI(requestBody) {
+  // Try the Vercel proxy endpoint first (avoids CORS, keeps API key server-side)
+  try {
+    const proxyResponse = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+
+    // If proxy exists and responded (even with error), use that response
+    if (proxyResponse.status !== 404) {
+      const data = await proxyResponse.json();
+      if (!proxyResponse.ok) {
+        throw new Error(data.error?.message || `API error: ${proxyResponse.status}`);
+      }
+      return data;
+    }
+    // 404 means proxy not deployed, fall through to direct call
+  } catch (err) {
+    // If the error came from the API (not a network/proxy error), re-throw
+    if (err.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError')) {
+      throw err;
+    }
+    // Network error means proxy not available, fall through to direct call
   }
 
-  // Video types
-  if (type.startsWith('video/')) {
-    return type; // e.g., "video/mp4", "video/webm"
+  // Fallback: direct API call (for local dev or Capacitor iOS)
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+  if (!apiKey || apiKey === 'your-api-key-here') {
+    throw new Error('API key not configured. Add VITE_ANTHROPIC_API_KEY to your environment or deploy with Vercel.');
   }
 
-  // Default fallback
-  return type;
+  const response = await fetch(ANTHROPIC_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `API request failed: ${response.status}`);
+  }
+
+  return response.json();
 }
 
 /**
  * Analyze a sermon recording using Claude
- * @param {File} mediaFile - The audio or video file to analyze
- * @param {Object} context - Additional context about the sermon
- * @param {string} context.title - Sermon title or scripture reference
- * @param {string} context.goal - The preacher's primary goal for this sermon
- * @param {string} context.date - When the sermon was/will be preached
- * @returns {Promise<Object>} - Claude's analysis response
  */
 export async function analyzeSermon(mediaFile, context = {}) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-
-  if (!apiKey || apiKey === 'your-api-key-here') {
-    throw new Error('Please add your Anthropic API key to the .env file');
+  const fileSizeMB = mediaFile.size / (1024 * 1024);
+  if (fileSizeMB > 4) {
+    console.warn(`File is ${fileSizeMB.toFixed(1)}MB. Large files may fail on the server proxy. Consider using shorter recordings.`);
   }
 
-  // Convert media file to base64
   const base64Data = await fileToBase64(mediaFile);
   const mediaType = getMediaType(mediaFile);
-
-  // Determine if it's audio or video
   const isVideo = mediaType.startsWith('video/');
 
-  // Build the context message
   let contextMessage = 'Please analyze this sermon recording.';
-  if (context.title) {
-    contextMessage += `\n\nSermon Title/Scripture: ${context.title}`;
-  }
-  if (context.goal) {
-    contextMessage += `\nPreacher's Primary Goal: ${context.goal}`;
-  }
-  if (context.date) {
-    contextMessage += `\nPreach Date: ${context.date}`;
-  }
+  if (context.title) contextMessage += `\n\nSermon Title/Scripture: ${context.title}`;
+  if (context.goal) contextMessage += `\nPreacher's Primary Goal: ${context.goal}`;
+  if (context.date) contextMessage += `\nPreach Date: ${context.date}`;
 
-  // Build the request body
   const requestBody = {
     model: 'claude-sonnet-4-5-20250929',
     max_tokens: 4096,
@@ -152,29 +174,8 @@ export async function analyzeSermon(mediaFile, context = {}) {
     ],
   };
 
-  // Make the API request
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `API request failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  // Extract the text response
+  const data = await callClaudeAPI(requestBody);
   const analysisText = data.content?.[0]?.text || '';
-
-  // Parse the scores from the response (basic parsing)
   const scores = parseScoresFromResponse(analysisText);
 
   return {
@@ -186,35 +187,27 @@ export async function analyzeSermon(mediaFile, context = {}) {
 
 /**
  * Parse scores from Claude's response text
- * This is a simple parser - you might want to make it more robust
  */
 function parseScoresFromResponse(text) {
   const scores = {
-    // Sacred Foundation (true = pass, false = needs work)
     theologicalFidelity: null,
     exegeticalSoundness: null,
     gospelCentrality: null,
-
-    // Structural Weight (0-10)
     relevancy: null,
     clarity: null,
     connectivity: null,
     precision: null,
     callToAction: null,
-
-    // Vocal Cadence (0-10)
     relatability: null,
     pacing: null,
     enthusiasm: null,
     charisma: null,
   };
 
-  // Try to extract pass/fail for Sacred Foundation
   scores.theologicalFidelity = /theological fidelity[:\s]*pass/i.test(text);
   scores.exegeticalSoundness = /exegetical soundness[:\s]*pass/i.test(text);
   scores.gospelCentrality = /gospel centrality[:\s]*pass/i.test(text);
 
-  // Try to extract numeric scores (look for patterns like "Relevancy: 8" or "Relevancy - 8/10")
   const scorePatterns = {
     relevancy: /relevancy[:\s-]*(\d+)/i,
     clarity: /clarity[:\s-]*(\d+)/i,
@@ -237,6 +230,4 @@ function parseScoresFromResponse(text) {
   return scores;
 }
 
-export default {
-  analyzeSermon,
-};
+export default { analyzeSermon };

@@ -1,6 +1,5 @@
 // Claude AI Service for Gamaliel - Sermon Analysis
-
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+// All API calls go through the Vercel serverless proxy at /api/analyze
 
 // The system prompt that tells Claude how to be "Gamaliel" and analyze sermons
 const GAMALIEL_SYSTEM_PROMPT = `You are Gamaliel, an expert homiletics (sermon) coach and analyzer. You are named after the respected Jewish teacher mentioned in the Bible (Acts 5:34). Your role is to provide thoughtful, constructive feedback on sermon delivery and content.
@@ -78,77 +77,44 @@ function getMediaType(file) {
 }
 
 /**
- * Send request to Claude API, trying the Vercel proxy first, then falling back to direct call
+ * Send request to Claude API via the Vercel serverless proxy ONLY.
+ * Never calls Anthropic directly from the browser (avoids CORS and API key exposure).
  */
 async function callClaudeAPI(requestBody) {
-  // Try the Vercel proxy endpoint first (avoids CORS, keeps API key server-side)
+  let response;
   try {
-    const proxyResponse = await fetch('/api/analyze', {
+    response = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),
     });
-
-    // If proxy exists and responded (even with error), use that response
-    if (proxyResponse.status !== 404) {
-      const data = await proxyResponse.json();
-      if (!proxyResponse.ok) {
-        throw new Error(data.error?.message || `API error: ${proxyResponse.status}`);
-      }
-      return data;
-    }
-    // 404 means proxy not deployed, fall through to direct call
   } catch (err) {
-    // Network errors and Safari "pattern" errors mean proxy not available — fall through to direct call
+    // Network error — proxy not reachable (local dev without proxy, or deployment issue)
     const msg = err.message || '';
-    const isNetworkError = msg.includes('Failed to fetch')
-      || msg.includes('NetworkError')
-      || msg.includes('pattern')
-      || msg.includes('Load failed');
-    if (!isNetworkError) {
-      throw err;
-    }
-    // Fall through to direct call
-  }
-
-  // Fallback: direct API call (for local dev or Capacitor iOS)
-  const rawKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-  const apiKey = (typeof rawKey === 'string') ? rawKey.trim() : '';
-
-  if (!apiKey) {
-    const message = 'API Key is missing in Vercel. Please add VITE_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY) to your Vercel Environment Variables and redeploy.';
-    alert(message);
-    throw new Error(message);
-  }
-
-  try {
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `API request failed: ${response.status}`);
-    }
-
-    return response.json();
-  } catch (err) {
-    // Catch Safari/WebKit "The string did not match the expected pattern" error
-    const msg = err.message || '';
-    if (msg.includes('pattern') || msg.includes('Load failed')) {
-      const message = 'Could not connect to Claude API. This may be a browser restriction. Please ensure your API key is configured in Vercel Environment Variables and use the deployed proxy.';
-      alert(message);
-      throw new Error(message);
+    if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('pattern') || msg.includes('Load failed')) {
+      throw new Error('Could not reach the Gamaliel API proxy. Please ensure you are running on Vercel or have the local proxy server running.');
     }
     throw err;
   }
+
+  // Parse response
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error(`Server returned invalid response (status ${response.status}). The /api/analyze proxy may not be deployed correctly.`);
+  }
+
+  if (!response.ok) {
+    const errorMsg = data.error?.message || `API error: ${response.status}`;
+    // Provide clear guidance for common errors
+    if (response.status === 500 && errorMsg.includes('not configured')) {
+      throw new Error('API Key is missing in Vercel. Please add VITE_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY) to your Vercel Environment Variables and redeploy.');
+    }
+    throw new Error(errorMsg);
+  }
+
+  return data;
 }
 
 /**

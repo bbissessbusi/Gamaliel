@@ -1,4 +1,5 @@
 import React from 'react';
+import appLogoSrc from '../assets/Applogo.png';
 
 const Logo = ({ height = 28, opacity = 1, showLabel = true, onClick }) => (
   <div
@@ -14,7 +15,7 @@ const Logo = ({ height = 28, opacity = 1, showLabel = true, onClick }) => (
     }}
   >
     <img
-      src="/Applogo.png"
+      src={appLogoSrc}
       alt="Gamaliel"
       style={{ height: `${height}px`, objectFit: 'contain' }}
     />

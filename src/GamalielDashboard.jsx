@@ -280,14 +280,54 @@ const AIPulse = () => {
 };
 
 // ============================================================================
+// WELCOME BACK PAGE (shown to returning users after login)
+// ============================================================================
+
+const WelcomeBackPage = ({ onContinue }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => onContinue(), 2500);
+    return () => clearTimeout(timer);
+  }, [onContinue]);
+
+  return (
+    <div
+      className="min-h-screen flex flex-col items-center justify-center text-white px-6"
+      style={{
+        fontFamily: "'Space Grotesk', sans-serif",
+        background: `radial-gradient(circle at 30% 20%, rgba(255, 69, 0, 0.15) 0%, transparent 40%),
+                     radial-gradient(circle at 70% 80%, rgba(139, 0, 139, 0.2) 0%, transparent 40%),
+                     #050203`,
+      }}
+    >
+      <Logo height={56} showLabel={false} />
+      <h1
+        className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight mt-8 mb-3 text-center"
+        style={{
+          background: 'linear-gradient(90deg, #FF4500 0%, #D12D6F 50%, #8B008B 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+        }}
+      >
+        Welcome Back
+      </h1>
+      <p className="text-white/50 text-sm font-light text-center max-w-sm">
+        Your scorecard is ready. Let's continue refining your craft.
+      </p>
+      <div className="mt-8 w-8 h-8 border-2 border-[#FF4500] border-t-transparent rounded-full animate-spin opacity-40" />
+    </div>
+  );
+};
+
+// ============================================================================
 // MAIN APP WITH PAGE NAVIGATION
 // ============================================================================
 
 export default function GamalielApp() {
-  const [currentPage, setCurrentPage] = useState('login'); // 'login' | 'signup' | 'dashboard' | 'summary' | 'glossary' | 'history' | 'tour'
+  const [currentPage, setCurrentPage] = useState('login'); // 'login' | 'signup' | 'dashboard' | 'summary' | 'glossary' | 'history' | 'tour' | 'welcome-back'
   const [glossaryTerm, setGlossaryTerm] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState('');
+  const [analysisMilestone, setAnalysisMilestone] = useState('');
   const [recordedFile, setRecordedFile] = useState(null);
   const [savedEvaluations, setSavedEvaluations] = useState([]);
   const fileInputRef = useRef(null);
@@ -342,12 +382,36 @@ export default function GamalielApp() {
   // Gamaliel AI Analysis - uses real Claude API when a file is uploaded
   const runAnalysis = async (file) => {
     setIsAnalyzing(true);
+    setAnalysisMilestone('');
 
     try {
       setAnalysisStatus('Preparing sermon recording...');
+      setAnalysisMilestone('Gamaliel is reading your sermon file...');
+      await new Promise(r => setTimeout(r, 1000));
+
+      setAnalysisStatus('Uploading to Gamaliel AI...');
+      setAnalysisMilestone('Encoding audio/video for cloud analysis...');
       await new Promise(r => setTimeout(r, 800));
 
       setAnalysisStatus('Analyzing with Gamaliel AI...');
+      setAnalysisMilestone('Gamaliel is listening to your sermon and evaluating delivery...');
+
+      // Start a milestone ticker while waiting for Claude
+      const milestones = [
+        'Evaluating theological fidelity and exegetical soundness...',
+        'Scoring structural weight: relevancy, clarity, connectivity...',
+        'Assessing vocal cadence: pacing, enthusiasm, charisma...',
+        'Identifying anchoring points and structural drift...',
+        'Crafting your personalized improvement step...',
+        'Almost done — finalizing your Homiletics Index...',
+      ];
+      let milestoneIndex = 0;
+      const milestoneInterval = setInterval(() => {
+        if (milestoneIndex < milestones.length) {
+          setAnalysisMilestone(milestones[milestoneIndex]);
+          milestoneIndex++;
+        }
+      }, 5000);
 
       const result = await analyzeSermon(file, {
         title: sermonTitle,
@@ -355,7 +419,10 @@ export default function GamalielApp() {
         date: preachDate,
       });
 
+      clearInterval(milestoneInterval);
+
       setAnalysisStatus('Processing results...');
+      setAnalysisMilestone('Mapping scores to your scorecard...');
       await new Promise(r => setTimeout(r, 500));
 
       // Apply parsed scores from Claude's response
@@ -398,14 +465,17 @@ export default function GamalielApp() {
       setEvaluatorName('Gamaliel');
 
       setAnalysisStatus('Analysis complete!');
+      setAnalysisMilestone('Your scorecard has been filled in by Gamaliel.');
     } catch (error) {
       setAnalysisStatus(`Error: ${error.message}`);
-      await new Promise(r => setTimeout(r, 3000));
+      setAnalysisMilestone('');
+      await new Promise(r => setTimeout(r, 4000));
     }
 
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 800));
     setIsAnalyzing(false);
     setAnalysisStatus('');
+    setAnalysisMilestone('');
   };
 
   // Trigger file picker when AI Assistant button is clicked
@@ -426,29 +496,50 @@ export default function GamalielApp() {
     }
   };
 
-  // Handle Calculate Score - saves to Supabase and navigates to summary
-  const handleCalculateScore = async () => {
+  // Save evaluation to Supabase + local state
+  const saveCurrentEvaluation = async () => {
     const evaluator = { type: evaluatorType, name: evaluatorType === 'ai' ? 'Gamaliel' : evaluatorName };
+    const evalData = {
+      sermonTitle, preachDate, primaryGoal,
+      sacredFoundation, structuralWeight, vocalCadence, postAnalysis,
+      totalScore, evaluator,
+    };
 
     // Save to Supabase
     try {
-      await saveEvaluation({
-        sermonTitle, preachDate, primaryGoal,
-        sacredFoundation, structuralWeight, vocalCadence, postAnalysis,
-        totalScore, evaluator,
-      });
+      await saveEvaluation(evalData);
     } catch (err) {
       console.warn('Supabase save skipped:', err.message);
     }
 
-    // Navigate to summary page and scroll to the very top
+    // Always save to local state for history page
+    setSavedEvaluations(prev => [{
+      total_score: totalScore,
+      sermon_title: sermonTitle || 'Untitled Sermon',
+      created_at: new Date().toISOString(),
+      evaluator_type: evaluator.type,
+      evaluator_name: evaluator.name,
+      structural_weight: structuralWeight,
+      vocal_cadence: vocalCadence,
+    }, ...prev]);
+  };
+
+  // Handle Calculate Score - saves and navigates to summary
+  const handleCalculateScore = async () => {
+    await saveCurrentEvaluation();
     setCurrentPage('summary');
     window.scrollTo(0, 0);
   };
 
-  // Reset and return to dashboard
-  const handleNewEvaluation = () => {
-    // Reset all fields
+  // Handle Save button - saves and clears the scorecard
+  const handleSave = async () => {
+    if (totalScore === 0 && !sermonTitle) return;
+    await saveCurrentEvaluation();
+    resetScorecard();
+  };
+
+  // Reset scorecard fields to blank
+  const resetScorecard = () => {
     setSermonTitle('');
     setPreachDate('');
     setPrimaryGoal('');
@@ -457,10 +548,14 @@ export default function GamalielApp() {
     setVocalCadence({ relatability: 0, pacing: 0, enthusiasm: 0, charisma: 0 });
     setPostAnalysis({ anchoring_point: '', structural_drift: '', measurable_step: '' });
     setRecordingStatus('ready');
+    setRecordedFile(null);
     setEvaluatorType('human');
     setEvaluatorName('');
+  };
 
-    // Return to dashboard and scroll to top
+  // Reset and return to dashboard
+  const handleNewEvaluation = () => {
+    resetScorecard();
     setCurrentPage('dashboard');
     window.scrollTo(0, 0);
   };
@@ -490,13 +585,24 @@ export default function GamalielApp() {
   // Auth handlers (placeholder — wire to Supabase auth as needed)
   const handleLogin = async (email, password) => {
     // TODO: Replace with Supabase auth: const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setCurrentPage('dashboard');
-    window.scrollTo(0, 0);
+    const hasVisited = localStorage.getItem('gamaliel_visited');
+    if (hasVisited) {
+      // Returning user — show "Welcome Back" then go to dashboard
+      setCurrentPage('welcome-back');
+      window.scrollTo(0, 0);
+    } else {
+      // New user — go to guided tour
+      localStorage.setItem('gamaliel_visited', 'true');
+      setCurrentPage('tour');
+      window.scrollTo(0, 0);
+    }
   };
 
   const handleSignUp = async (fullName, email, password) => {
     // TODO: Replace with Supabase auth: const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
-    setCurrentPage('dashboard');
+    // New user — always go to guided tour
+    localStorage.setItem('gamaliel_visited', 'true');
+    setCurrentPage('tour');
     window.scrollTo(0, 0);
   };
 
@@ -529,7 +635,7 @@ export default function GamalielApp() {
             >
               LEXICON
             </button>
-            <GradientButton small>SAVE</GradientButton>
+            <GradientButton small onClick={handleSave}>SAVE</GradientButton>
           </div>
         </div>
       </header>
@@ -542,9 +648,7 @@ export default function GamalielApp() {
               background: 'linear-gradient(90deg, #FF4500 0%, #D12D6F 50%, #8B008B 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-            }}>HOMILETICS</span>
-            <br />
-            <span style={{ color: '#FF4500' }}>SCORECARD</span>
+            }}>SCORECARD</span>
           </h1>
           <p style={{ color: 'rgba(255,255,255,0.7)' }} className="text-sm font-light leading-relaxed max-w-md">
             Premium digital analysis of sermon weight, structure, and delivery. Designed for intentional preachers.
@@ -594,13 +698,18 @@ export default function GamalielApp() {
                   </div>
                 )}
 
-                {/* Analysis Status */}
+                {/* Analysis Status with Milestones */}
                 {isAnalyzing && (
-                  <div className="bg-[#39ff14]/10 border border-[#39ff14]/30 rounded-xl px-4 py-3">
+                  <div className="bg-[#39ff14]/10 border border-[#39ff14]/30 rounded-xl px-4 py-3 space-y-2">
                     <div className="flex items-center gap-3">
                       <div className="w-4 h-4 border-2 border-[#39ff14] border-t-transparent rounded-full animate-spin" />
-                      <span className="text-[10px] font-mono text-[#39ff14]">{analysisStatus}</span>
+                      <span className="text-[10px] font-mono text-[#39ff14] font-bold">{analysisStatus}</span>
                     </div>
+                    {analysisMilestone && (
+                      <p className="text-[9px] font-mono text-white/50 pl-7 leading-relaxed italic">
+                        {analysisMilestone}
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -830,6 +939,8 @@ export default function GamalielApp() {
           onSignUp={handleSignUp}
           onNavigateLogin={() => { setCurrentPage('login'); window.scrollTo(0, 0); }}
         />
+      ) : currentPage === 'welcome-back' ? (
+        <WelcomeBackPage onContinue={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
       ) : currentPage === 'tour' ? (
         <GuidedTourPage onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onSkip={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateToLogin} />
       ) : currentPage === 'glossary' ? (

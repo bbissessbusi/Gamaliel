@@ -10,8 +10,66 @@ const MOCK_EVALUATION = {
   title: 'Sample Evaluation',
   date: '01 JAN 2026',
   evaluator: { type: 'ai', name: 'Gamaliel' },
+  lowestMetric: 'pacing',
   isMock: true,
 };
+
+// ============================================================================
+// METRIC LABELS AND COLORS
+// ============================================================================
+
+const METRIC_LABELS = {
+  relevancy: 'Relevancy',
+  clarity: 'Clarity',
+  connectivity: 'Connectivity',
+  precision: 'Precision',
+  call_to_action: 'Call to Action',
+  relatability: 'Relatability',
+  pacing: 'Pacing',
+  enthusiasm: 'Enthusiasm',
+  charisma: 'Charisma',
+};
+
+const METRIC_COLORS = {
+  relevancy: '#FF4500',
+  clarity: '#E03E6B',
+  connectivity: '#C23890',
+  precision: '#A432B5',
+  call_to_action: '#8B008B',
+  relatability: '#FF6347',
+  pacing: '#D12D6F',
+  enthusiasm: '#B026A3',
+  charisma: '#9400D3',
+};
+
+/**
+ * Find the lowest scoring metric from structural_weight and vocal_cadence
+ */
+function findLowestMetric(structuralWeight, vocalCadence) {
+  const allScores = {};
+  if (structuralWeight && typeof structuralWeight === 'object') {
+    Object.entries(structuralWeight).forEach(([k, v]) => {
+      allScores[k] = typeof v === 'number' ? v : 0;
+    });
+  }
+  if (vocalCadence && typeof vocalCadence === 'object') {
+    Object.entries(vocalCadence).forEach(([k, v]) => {
+      allScores[k] = typeof v === 'number' ? v : 0;
+    });
+  }
+
+  if (Object.keys(allScores).length === 0) return 'unknown';
+
+  let lowestKey = Object.keys(allScores)[0];
+  let lowestVal = allScores[lowestKey];
+  for (const [k, v] of Object.entries(allScores)) {
+    if (v < lowestVal) {
+      lowestKey = k;
+      lowestVal = v;
+    }
+  }
+  return lowestKey;
+}
 
 // ============================================================================
 // WAVE CANVAS BACKGROUND
@@ -128,7 +186,7 @@ const WavesCanvas = () => {
 // EVALUATION CARD
 // ============================================================================
 
-const EvaluationCard = ({ score, title, date, evaluator, isMock }) => (
+const EvaluationCard = ({ score, title, date, evaluator, lowestMetric, isMock }) => (
   <div className={`history-glass-slate ${isMock ? 'opacity-60' : ''}`}>
     {isMock && (
       <span className="text-[7px] text-white/30 uppercase tracking-widest mb-2 font-bold" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
@@ -152,6 +210,21 @@ const EvaluationCard = ({ score, title, date, evaluator, isMock }) => (
     >
       {score}
     </div>
+    {lowestMetric && lowestMetric !== 'unknown' && (
+      <div className="mb-2">
+        <span
+          className="text-[7px] uppercase tracking-widest px-2 py-0.5 rounded-full"
+          style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            color: METRIC_COLORS[lowestMetric] || '#FF4500',
+            background: `${METRIC_COLORS[lowestMetric] || '#FF4500'}15`,
+            border: `1px solid ${METRIC_COLORS[lowestMetric] || '#FF4500'}30`,
+          }}
+        >
+          Improve: {METRIC_LABELS[lowestMetric] || lowestMetric}
+        </span>
+      </div>
+    )}
     <div className="mt-auto pt-4 md:pt-6 border-t border-white/5 w-full">
       <p className="text-[10px] md:text-[11px] font-bold text-white mb-0.5">{title}</p>
       <p
@@ -200,6 +273,27 @@ const EvaluationCard = ({ score, title, date, evaluator, isMock }) => (
 );
 
 // ============================================================================
+// SECTION GROUP HEADER
+// ============================================================================
+
+const GroupHeader = ({ metricKey, count }) => (
+  <div className="flex items-center gap-3 mb-4 mt-10 first:mt-0">
+    <div
+      className="w-2 h-2 rounded-full"
+      style={{ background: METRIC_COLORS[metricKey] || '#FF4500', boxShadow: `0 0 8px ${METRIC_COLORS[metricKey] || '#FF4500'}60` }}
+    />
+    <h3
+      className="text-[10px] font-black uppercase tracking-[0.4em]"
+      style={{ fontFamily: "'JetBrains Mono', monospace", color: METRIC_COLORS[metricKey] || '#FF4500' }}
+    >
+      Needs Improvement: {METRIC_LABELS[metricKey] || metricKey}
+    </h3>
+    <span className="text-[8px] text-white/30 font-mono">({count})</span>
+    <span className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
+  </div>
+);
+
+// ============================================================================
 // MAIN PAGE COMPONENT
 // ============================================================================
 
@@ -208,15 +302,31 @@ export default function EvaluationHistoryPage({ evaluations: supabaseEvals, onBa
     window.scrollTo(0, 0);
   }, []);
 
-  // Build display list: real Supabase data OR 1 mock card as fallback
+  // Build display list: real data with lowest metric computed, OR 1 mock card
   const displayEvaluations = (supabaseEvals && supabaseEvals.length > 0)
-    ? supabaseEvals.map((ev) => ({
-        score: String(ev.total_score),
-        title: ev.sermon_title,
-        date: new Date(ev.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase(),
-        evaluator: { type: ev.evaluator_type, name: ev.evaluator_name },
-      }))
+    ? supabaseEvals.map((ev) => {
+        const lowestMetric = findLowestMetric(ev.structural_weight, ev.vocal_cadence);
+        return {
+          score: String(ev.total_score),
+          title: ev.sermon_title || 'Untitled Sermon',
+          date: new Date(ev.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase(),
+          evaluator: { type: ev.evaluator_type, name: ev.evaluator_name },
+          lowestMetric,
+        };
+      })
     : [MOCK_EVALUATION];
+
+  // Group evaluations by lowest metric
+  const hasMock = displayEvaluations.length === 1 && displayEvaluations[0].isMock;
+  const grouped = {};
+  if (!hasMock) {
+    displayEvaluations.forEach((ev) => {
+      const key = ev.lowestMetric || 'unknown';
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(ev);
+    });
+  }
+  const groupKeys = Object.keys(grouped);
 
   return (
     <div
@@ -246,23 +356,34 @@ export default function EvaluationHistoryPage({ evaluations: supabaseEvals, onBa
               className="text-white/40 text-[9px] md:text-[12px] tracking-[0.5em] md:tracking-[0.8em] uppercase"
               style={{ fontFamily: "'JetBrains Mono', monospace" }}
             >
-              INTERNAL AUDIT
+              {hasMock ? 'INTERNAL AUDIT' : 'GROUPED BY AREA FOR IMPROVEMENT'}
             </p>
           </div>
         </div>
 
-        {/* Evaluation Cards Grid */}
+        {/* Evaluation Cards — grouped by lowest metric */}
         <main className="max-w-7xl mx-auto px-4 md:px-6 pb-16 md:pb-24 flex-grow w-full">
-          {displayEvaluations.length === 1 && displayEvaluations[0].isMock && (
-            <p className="text-center text-white/30 text-[10px] uppercase tracking-widest mb-6" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-              Complete your first evaluation to see it here
-            </p>
+          {hasMock ? (
+            <>
+              <p className="text-center text-white/30 text-[10px] uppercase tracking-widest mb-6" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                Complete your first evaluation to see it here
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <EvaluationCard {...MOCK_EVALUATION} />
+              </div>
+            </>
+          ) : (
+            groupKeys.map((metricKey) => (
+              <div key={metricKey}>
+                <GroupHeader metricKey={metricKey} count={grouped[metricKey].length} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {grouped[metricKey].map((evaluation, index) => (
+                    <EvaluationCard key={`${metricKey}-${index}`} {...evaluation} />
+                  ))}
+                </div>
+              </div>
+            ))
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {displayEvaluations.map((evaluation, index) => (
-              <EvaluationCard key={index} {...evaluation} />
-            ))}
-          </div>
         </main>
 
         {/* Footer */}

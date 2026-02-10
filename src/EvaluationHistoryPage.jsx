@@ -390,7 +390,7 @@ export default function EvaluationHistoryPage({ evaluations: supabaseEvals, onBa
         <footer className="border-t border-white/5 py-8" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
           <div className="text-center">
             <p className="text-[8px] tracking-[0.5em] text-white/40 uppercase font-black">
-              © 2026 SCRIBE INC.
+              © 2026 THE SCRIBES INC.
             </p>
           </div>
         </footer>
@@ -411,7 +411,7 @@ export default function EvaluationHistoryPage({ evaluations: supabaseEvals, onBa
           backdrop-filter: blur(16px) saturate(180%);
           -webkit-backdrop-filter: blur(16px) saturate(180%);
           border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 0.75rem;
+          border-radius: 2rem;
           transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
                       background 0.3s ease,
                       box-shadow 0.3s ease;

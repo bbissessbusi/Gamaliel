@@ -912,7 +912,7 @@ export default function GamalielApp() {
       {/* Footer */}
       <footer className="border-t border-white/5 py-8 bg-black/40 safe-bottom">
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <p className="text-[8px] tracking-[0.5em] text-white/50 uppercase font-black">© 2026 SCRIBE INC.</p>
+          <p className="text-[8px] tracking-[0.5em] text-white/50 uppercase font-black">© 2026 THE SCRIBES INC.</p>
         </div>
       </footer>
     </>

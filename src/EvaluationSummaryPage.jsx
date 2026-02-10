@@ -298,7 +298,7 @@ export default function EvaluationSummaryPage({
       <footer className="border-t border-white/5 py-8 mt-12" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
         <div className="max-w-7xl mx-auto px-6 text-center">
           <p className="text-[8px] md:text-[9px] tracking-[0.8em] text-white/40 uppercase font-black">
-            © 2026 SCRIBE INC.
+            © 2026 THE SCRIBES INC.
           </p>
         </div>
       </footer>
@@ -310,7 +310,7 @@ export default function EvaluationSummaryPage({
           backdrop-filter: blur(24px) saturate(160%);
           -webkit-backdrop-filter: blur(24px) saturate(160%);
           position: relative;
-          border-radius: 1.25rem;
+          border-radius: 2.5rem;
           overflow: hidden;
           box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.02);
         }

@@ -139,7 +139,7 @@ export default function LoginPage({ onLogin, onNavigateSignUp, onNavigateForgotP
             className="text-[9px] font-bold uppercase tracking-[0.2em]"
             style={{ fontFamily: "'JetBrains Mono', monospace" }}
           >
-            THE SCRIBE INC.
+            THE SCRIBES INC.
           </span>
         </div>
         <p className="text-[8px] tracking-[1.2em] text-white/25 uppercase font-black text-center">

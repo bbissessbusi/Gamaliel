@@ -352,7 +352,7 @@ export default function GuidedTourPage({ onBack, onSkip, onLogoClick }) {
       <footer className="border-t border-white/5 py-8 mt-12" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
         <div className="max-w-7xl mx-auto px-6 text-center">
           <p className="text-[8px] md:text-[9px] tracking-[0.5em] text-white/40 uppercase font-black">
-            © 2026 SCRIBE INC.
+            © 2026 THE SCRIBES INC.
           </p>
         </div>
       </footer>

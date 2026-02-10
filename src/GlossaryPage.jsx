@@ -316,7 +316,7 @@ export default function GlossaryPage({ scrollToTerm, onBack, onLogoClick }) {
         <footer className="w-full py-8 mt-auto border-t border-white/5" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}>
           <div className="w-full px-6 text-center">
             <p className="text-[8px] tracking-[0.5em] text-white/40 uppercase font-black">
-              © 2026 SCRIBE INC.
+              © 2026 THE SCRIBES INC.
             </p>
           </div>
         </footer>
@@ -331,7 +331,7 @@ export default function GlossaryPage({ scrollToTerm, onBack, onLogoClick }) {
           background: rgba(255, 255, 255, 0.04);
           backdrop-filter: blur(20px) saturate(160%);
           -webkit-backdrop-filter: blur(20px) saturate(160%);
-          border-radius: 1.5rem;
+          border-radius: 2.5rem;
           transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
         .glossary-glass-card:hover {

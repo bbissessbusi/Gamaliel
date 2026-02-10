@@ -77,24 +77,31 @@ function getMediaType(file) {
 }
 
 /**
- * Send request to Claude API via the Vercel serverless proxy ONLY.
+ * Send request to Claude API via the Vercel Edge Function proxy ONLY.
  * Never calls Anthropic directly from the browser (avoids CORS and API key exposure).
  */
 async function callClaudeAPI(requestBody) {
+  const bodyStr = JSON.stringify(requestBody);
+
   let response;
   try {
     response = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
+      body: bodyStr,
     });
   } catch (err) {
-    // Network error — proxy not reachable (local dev without proxy, or deployment issue)
+    // Network error — proxy not reachable
     const msg = err.message || '';
     if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('pattern') || msg.includes('Load failed')) {
       throw new Error('Could not reach the Gamaliel API proxy. Please ensure you are running on Vercel or have the local proxy server running.');
     }
     throw err;
+  }
+
+  // Handle 413 specifically — payload too large
+  if (response.status === 413) {
+    throw new Error('Your sermon file is too large. Please try a shorter recording or compress the audio file before uploading (under 20MB recommended).');
   }
 
   // Parse response
@@ -107,9 +114,8 @@ async function callClaudeAPI(requestBody) {
 
   if (!response.ok) {
     const errorMsg = data.error?.message || `API error: ${response.status}`;
-    // Provide clear guidance for common errors
     if (response.status === 500 && errorMsg.includes('not configured')) {
-      throw new Error('API Key is missing in Vercel. Please add VITE_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY) to your Vercel Environment Variables and redeploy.');
+      throw new Error('API Key is missing in Vercel. Please add ANTHROPIC_API_KEY to your Vercel Environment Variables and redeploy.');
     }
     throw new Error(errorMsg);
   }
@@ -122,8 +128,14 @@ async function callClaudeAPI(requestBody) {
  */
 export async function analyzeSermon(mediaFile, context = {}) {
   const fileSizeMB = mediaFile.size / (1024 * 1024);
-  if (fileSizeMB > 4) {
-    console.warn(`File is ${fileSizeMB.toFixed(1)}MB. Large files may fail on the server proxy. Consider using shorter recordings.`);
+
+  // Hard limit: files over 25MB will almost certainly fail
+  if (fileSizeMB > 25) {
+    throw new Error(`File is ${fileSizeMB.toFixed(0)}MB — too large for analysis. Please use a recording under 20MB (roughly 20 minutes of audio). Try compressing the file or using a lower quality recording.`);
+  }
+
+  if (fileSizeMB > 15) {
+    console.warn(`File is ${fileSizeMB.toFixed(1)}MB. Large files may take longer to upload and process.`);
   }
 
   const base64Data = await fileToBase64(mediaFile);

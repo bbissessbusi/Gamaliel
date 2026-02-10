@@ -99,36 +99,56 @@ async function callClaudeAPI(requestBody) {
     }
     // 404 means proxy not deployed, fall through to direct call
   } catch (err) {
-    // If the error came from the API (not a network/proxy error), re-throw
-    if (err.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError')) {
+    // Network errors and Safari "pattern" errors mean proxy not available — fall through to direct call
+    const msg = err.message || '';
+    const isNetworkError = msg.includes('Failed to fetch')
+      || msg.includes('NetworkError')
+      || msg.includes('pattern')
+      || msg.includes('Load failed');
+    if (!isNetworkError) {
       throw err;
     }
-    // Network error means proxy not available, fall through to direct call
+    // Fall through to direct call
   }
 
   // Fallback: direct API call (for local dev or Capacitor iOS)
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-  if (!apiKey || apiKey === 'your-api-key-here') {
-    throw new Error('API key not configured. Add VITE_ANTHROPIC_API_KEY to your environment or deploy with Vercel.');
+  const rawKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+  const apiKey = (typeof rawKey === 'string') ? rawKey.trim() : '';
+
+  if (!apiKey) {
+    const message = 'API Key is missing in Vercel. Please add VITE_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY) to your Vercel Environment Variables and redeploy.';
+    alert(message);
+    throw new Error(message);
   }
 
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify(requestBody),
-  });
+  try {
+    const response = await fetch(ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify(requestBody),
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `API request failed: ${response.status}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || `API request failed: ${response.status}`);
+    }
+
+    return response.json();
+  } catch (err) {
+    // Catch Safari/WebKit "The string did not match the expected pattern" error
+    const msg = err.message || '';
+    if (msg.includes('pattern') || msg.includes('Load failed')) {
+      const message = 'Could not connect to Claude API. This may be a browser restriction. Please ensure your API key is configured in Vercel Environment Variables and use the deployed proxy.';
+      alert(message);
+      throw new Error(message);
+    }
+    throw err;
   }
-
-  return response.json();
 }
 
 /**

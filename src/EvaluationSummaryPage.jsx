@@ -125,6 +125,7 @@ export default function EvaluationSummaryPage({
   evaluator,
   onBack,
   onNewEvaluation,
+  onLogoClick,
 }) {
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -144,7 +145,7 @@ export default function EvaluationSummaryPage({
       {/* Sticky Header */}
       <header className="sticky top-0 z-[100] border-b border-white/5 backdrop-blur-2xl" style={{ background: 'rgba(7, 3, 4, 0.8)', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="max-w-7xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between">
-          <Logo height={28} />
+          <Logo height={28} onClick={onLogoClick} />
           <nav className="flex items-center gap-4 md:gap-8">
             <button
               onClick={onBack}

@@ -3,6 +3,8 @@ import GlossaryPage from './GlossaryPage';
 import EvaluationHistoryPage from './EvaluationHistoryPage';
 import EvaluationSummaryPage from './EvaluationSummaryPage';
 import GuidedTourPage from './GuidedTourPage';
+import LoginPage from './LoginPage';
+import SignUpPage from './SignUpPage';
 import Logo from './components/Logo';
 import { analyzeSermon } from './services/claudeService';
 import { saveEvaluation, getEvaluations } from './services/supabaseService';
@@ -282,7 +284,7 @@ const AIPulse = () => {
 // ============================================================================
 
 export default function GamalielApp() {
-  const [currentPage, setCurrentPage] = useState('dashboard'); // 'dashboard' | 'summary' | 'glossary' | 'history' | 'tour'
+  const [currentPage, setCurrentPage] = useState('login'); // 'login' | 'signup' | 'dashboard' | 'summary' | 'glossary' | 'history' | 'tour'
   const [glossaryTerm, setGlossaryTerm] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState('');
@@ -479,6 +481,25 @@ export default function GamalielApp() {
     setCurrentPage('glossary');
   };
 
+  // Navigate to login page (used by Logo onClick on all pages)
+  const navigateToLogin = () => {
+    setCurrentPage('login');
+    window.scrollTo(0, 0);
+  };
+
+  // Auth handlers (placeholder — wire to Supabase auth as needed)
+  const handleLogin = async (email, password) => {
+    // TODO: Replace with Supabase auth: const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setCurrentPage('dashboard');
+    window.scrollTo(0, 0);
+  };
+
+  const handleSignUp = async (fullName, email, password) => {
+    // TODO: Replace with Supabase auth: const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
+    setCurrentPage('dashboard');
+    window.scrollTo(0, 0);
+  };
+
   // ============================================================================
   // RENDER DASHBOARD PAGE
   // ============================================================================
@@ -488,7 +509,7 @@ export default function GamalielApp() {
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-white/5 bg-[#070304]/80 backdrop-blur-2xl safe-top">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Logo height={28} />
+          <Logo height={28} onClick={navigateToLogin} />
           <div className="flex items-center gap-3">
             <button
               onClick={() => { setCurrentPage('tour'); }}
@@ -798,12 +819,23 @@ export default function GamalielApp() {
     <div className="min-h-screen text-white font-sans selection:bg-orange-500/30" style={{
       background: `radial-gradient(circle at 10% 10%, rgba(255, 69, 0, 0.12) 0%, transparent 40%), radial-gradient(circle at 90% 90%, rgba(139, 0, 139, 0.12) 0%, transparent 40%), radial-gradient(circle at 50% 50%, rgba(57, 255, 20, 0.02) 0%, transparent 50%), #070304`
     }}>
-      {currentPage === 'tour' ? (
-        <GuidedTourPage onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onSkip={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
+      {currentPage === 'login' ? (
+        <LoginPage
+          onLogin={handleLogin}
+          onNavigateSignUp={() => { setCurrentPage('signup'); window.scrollTo(0, 0); }}
+          onNavigateForgotPassword={() => { /* TODO: Forgot password flow */ }}
+        />
+      ) : currentPage === 'signup' ? (
+        <SignUpPage
+          onSignUp={handleSignUp}
+          onNavigateLogin={() => { setCurrentPage('login'); window.scrollTo(0, 0); }}
+        />
+      ) : currentPage === 'tour' ? (
+        <GuidedTourPage onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onSkip={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateToLogin} />
       ) : currentPage === 'glossary' ? (
-        <GlossaryPage scrollToTerm={glossaryTerm} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
+        <GlossaryPage scrollToTerm={glossaryTerm} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateToLogin} />
       ) : currentPage === 'history' ? (
-        <EvaluationHistoryPage evaluations={savedEvaluations} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
+        <EvaluationHistoryPage evaluations={savedEvaluations} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateToLogin} />
       ) : currentPage === 'summary' ? (
         <EvaluationSummaryPage
           totalScore={totalScore}
@@ -814,6 +846,7 @@ export default function GamalielApp() {
           evaluator={{ type: evaluatorType, name: evaluatorType === 'ai' ? 'Gamaliel' : evaluatorName }}
           onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }}
           onNewEvaluation={handleNewEvaluation}
+          onLogoClick={navigateToLogin}
         />
       ) : (
         renderDashboard()

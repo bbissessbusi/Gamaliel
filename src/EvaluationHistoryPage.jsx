@@ -203,7 +203,7 @@ const EvaluationCard = ({ score, title, date, evaluator, isMock }) => (
 // MAIN PAGE COMPONENT
 // ============================================================================
 
-export default function EvaluationHistoryPage({ evaluations: supabaseEvals, onBack }) {
+export default function EvaluationHistoryPage({ evaluations: supabaseEvals, onBack, onLogoClick }) {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
@@ -229,7 +229,7 @@ export default function EvaluationHistoryPage({ evaluations: supabaseEvals, onBa
         {/* Header with Logo and Back */}
         <header className="sticky top-0 z-50 border-b border-white/5 backdrop-blur-2xl" style={{ background: 'rgba(0, 0, 0, 0.8)', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <div className="max-w-7xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between">
-            <Logo height={28} />
+            <Logo height={28} onClick={onLogoClick} />
             <button onClick={onBack} className="history-back-btn group">
               <span className="text-[16px] transition-transform group-hover:-translate-x-1">⬅️</span>
             </button>

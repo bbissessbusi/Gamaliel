@@ -155,7 +155,7 @@ const SectionDivider = ({ number, title }) => (
 // MAIN GLOSSARY PAGE
 // ============================================================================
 
-export default function GlossaryPage({ scrollToTerm, onBack }) {
+export default function GlossaryPage({ scrollToTerm, onBack, onLogoClick }) {
   useEffect(() => {
     if (scrollToTerm) {
       const timer = setTimeout(() => {
@@ -183,7 +183,7 @@ export default function GlossaryPage({ scrollToTerm, onBack }) {
         {/* Header with Logo and Back Button */}
         <header className="sticky top-0 z-50 border-b border-white/5 backdrop-blur-2xl" style={{ background: 'rgba(0, 0, 0, 0.8)', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <div className="max-w-7xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between">
-            <Logo height={28} />
+            <Logo height={28} onClick={onLogoClick} />
             <button
               onClick={onBack}
               className="glossary-back-btn group"

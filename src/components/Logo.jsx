@@ -1,7 +1,18 @@
 import React from 'react';
 
-const Logo = ({ height = 28, opacity = 1, showLabel = true }) => (
-  <div style={{ height: `${height}px`, opacity, display: 'flex', alignItems: 'center', gap: '8px' }}>
+const Logo = ({ height = 28, opacity = 1, showLabel = true, onClick }) => (
+  <div
+    onClick={onClick}
+    style={{
+      height: `${height}px`,
+      opacity,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      cursor: onClick ? 'pointer' : 'default',
+      minHeight: '44px',
+    }}
+  >
     <img
       src="/Applogo.png"
       alt="Gamaliel"

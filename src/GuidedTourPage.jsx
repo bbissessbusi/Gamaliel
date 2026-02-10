@@ -187,7 +187,7 @@ const StepPreview = ({ stepId }) => {
 // MAIN GUIDED TOUR PAGE
 // ============================================================================
 
-export default function GuidedTourPage({ onBack, onSkip }) {
+export default function GuidedTourPage({ onBack, onSkip, onLogoClick }) {
   const [currentStep, setCurrentStep] = useState(0);
 
   useEffect(() => {
@@ -231,7 +231,7 @@ export default function GuidedTourPage({ onBack, onSkip }) {
       {/* Header */}
       <header className="sticky top-0 z-[100] border-b border-white/5 backdrop-blur-2xl" style={{ background: 'rgba(7, 3, 4, 0.8)', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="max-w-5xl mx-auto px-4 md:px-6 h-14 md:h-16 flex items-center justify-between">
-          <Logo height={28} />
+          <Logo height={28} onClick={onLogoClick} />
           <button
             onClick={handleSkip}
             className="bg-white/5 border border-white/10 text-white px-4 md:px-6 py-2 rounded-lg md:rounded-xl font-bold text-[8px] md:text-[10px] tracking-[0.2em] transition-all hover:bg-white/10 uppercase"

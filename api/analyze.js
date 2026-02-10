@@ -15,11 +15,24 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKey = process.env.VITE_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+  // Try ANTHROPIC_API_KEY first (standard server-side name), then VITE_ prefixed
+  const rawKey = process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY || '';
+  const apiKey = rawKey.trim();
 
   if (!apiKey) {
     return res.status(500).json({
-      error: { message: 'Anthropic API key not configured. Add VITE_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY to Vercel environment variables.' }
+      error: {
+        message: 'Anthropic API key not configured. Add ANTHROPIC_API_KEY to Vercel environment variables (Settings → Environment Variables). Make sure it is available for "Production" and "Preview" environments.',
+      }
+    });
+  }
+
+  // Validate key format: Anthropic keys start with "sk-ant-"
+  if (!apiKey.startsWith('sk-ant-')) {
+    return res.status(500).json({
+      error: {
+        message: `Invalid API key format. Anthropic keys start with "sk-ant-". Your key starts with "${apiKey.substring(0, 7)}...". Please check your ANTHROPIC_API_KEY in Vercel environment variables — make sure there are no extra quotes or spaces.`,
+      }
     });
   }
 

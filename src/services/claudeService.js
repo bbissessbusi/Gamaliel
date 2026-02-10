@@ -1,6 +1,5 @@
 // Claude AI Service for Gamaliel - Sermon Analysis
-
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+// All API calls go through the Vercel serverless proxy at /api/analyze
 
 // The system prompt that tells Claude how to be "Gamaliel" and analyze sermons
 const GAMALIEL_SYSTEM_PROMPT = `You are Gamaliel, an expert homiletics (sermon) coach and analyzer. You are named after the respected Jewish teacher mentioned in the Bible (Acts 5:34). Your role is to provide thoughtful, constructive feedback on sermon delivery and content.
@@ -63,7 +62,6 @@ async function fileToBase64(file) {
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = () => {
-      // Remove the data URL prefix (e.g., "data:audio/mp3;base64,")
       const base64 = reader.result.split(',')[1];
       resolve(base64);
     };
@@ -75,60 +73,82 @@ async function fileToBase64(file) {
  * Get the media type string for Claude API
  */
 function getMediaType(file) {
-  const type = file.type;
+  return file.type || 'audio/mpeg';
+}
 
-  // Audio types
-  if (type.startsWith('audio/')) {
-    return type; // e.g., "audio/mp3", "audio/wav", "audio/m4a"
+/**
+ * Send request to Claude API via the Vercel Edge Function proxy ONLY.
+ * Never calls Anthropic directly from the browser (avoids CORS and API key exposure).
+ */
+async function callClaudeAPI(requestBody) {
+  const bodyStr = JSON.stringify(requestBody);
+
+  let response;
+  try {
+    response = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: bodyStr,
+    });
+  } catch (err) {
+    // Network error — proxy not reachable
+    const msg = err.message || '';
+    if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('pattern') || msg.includes('Load failed')) {
+      throw new Error('Could not reach the Gamaliel API proxy. Please ensure you are running on Vercel or have the local proxy server running.');
+    }
+    throw err;
   }
 
-  // Video types
-  if (type.startsWith('video/')) {
-    return type; // e.g., "video/mp4", "video/webm"
+  // Handle 413 specifically — payload too large
+  if (response.status === 413) {
+    throw new Error('Your sermon file is too large. Please try a shorter recording or compress the audio file before uploading (under 20MB recommended).');
   }
 
-  // Default fallback
-  return type;
+  // Parse response
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error(`Server returned invalid response (status ${response.status}). The /api/analyze proxy may not be deployed correctly.`);
+  }
+
+  if (!response.ok) {
+    const errorMsg = data.error?.message || `API error: ${response.status}`;
+    if (response.status === 500 && errorMsg.includes('not configured')) {
+      throw new Error('API Key is missing in Vercel. Please add ANTHROPIC_API_KEY to your Vercel Environment Variables and redeploy.');
+    }
+    throw new Error(errorMsg);
+  }
+
+  return data;
 }
 
 /**
  * Analyze a sermon recording using Claude
- * @param {File} mediaFile - The audio or video file to analyze
- * @param {Object} context - Additional context about the sermon
- * @param {string} context.title - Sermon title or scripture reference
- * @param {string} context.goal - The preacher's primary goal for this sermon
- * @param {string} context.date - When the sermon was/will be preached
- * @returns {Promise<Object>} - Claude's analysis response
  */
 export async function analyzeSermon(mediaFile, context = {}) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+  const fileSizeMB = mediaFile.size / (1024 * 1024);
 
-  if (!apiKey || apiKey === 'your-api-key-here') {
-    throw new Error('Please add your Anthropic API key to the .env file');
+  // Hard limit: files over 25MB will almost certainly fail
+  if (fileSizeMB > 25) {
+    throw new Error(`File is ${fileSizeMB.toFixed(0)}MB — too large for analysis. Please use a recording under 20MB (roughly 20 minutes of audio). Try compressing the file or using a lower quality recording.`);
   }
 
-  // Convert media file to base64
+  if (fileSizeMB > 15) {
+    console.warn(`File is ${fileSizeMB.toFixed(1)}MB. Large files may take longer to upload and process.`);
+  }
+
   const base64Data = await fileToBase64(mediaFile);
   const mediaType = getMediaType(mediaFile);
-
-  // Determine if it's audio or video
   const isVideo = mediaType.startsWith('video/');
 
-  // Build the context message
   let contextMessage = 'Please analyze this sermon recording.';
-  if (context.title) {
-    contextMessage += `\n\nSermon Title/Scripture: ${context.title}`;
-  }
-  if (context.goal) {
-    contextMessage += `\nPreacher's Primary Goal: ${context.goal}`;
-  }
-  if (context.date) {
-    contextMessage += `\nPreach Date: ${context.date}`;
-  }
+  if (context.title) contextMessage += `\n\nSermon Title/Scripture: ${context.title}`;
+  if (context.goal) contextMessage += `\nPreacher's Primary Goal: ${context.goal}`;
+  if (context.date) contextMessage += `\nPreach Date: ${context.date}`;
 
-  // Build the request body
   const requestBody = {
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-5-20250929',
     max_tokens: 4096,
     system: GAMALIEL_SYSTEM_PROMPT,
     messages: [
@@ -152,29 +172,8 @@ export async function analyzeSermon(mediaFile, context = {}) {
     ],
   };
 
-  // Make the API request
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `API request failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  // Extract the text response
+  const data = await callClaudeAPI(requestBody);
   const analysisText = data.content?.[0]?.text || '';
-
-  // Parse the scores from the response (basic parsing)
   const scores = parseScoresFromResponse(analysisText);
 
   return {
@@ -186,35 +185,27 @@ export async function analyzeSermon(mediaFile, context = {}) {
 
 /**
  * Parse scores from Claude's response text
- * This is a simple parser - you might want to make it more robust
  */
 function parseScoresFromResponse(text) {
   const scores = {
-    // Sacred Foundation (true = pass, false = needs work)
     theologicalFidelity: null,
     exegeticalSoundness: null,
     gospelCentrality: null,
-
-    // Structural Weight (0-10)
     relevancy: null,
     clarity: null,
     connectivity: null,
     precision: null,
     callToAction: null,
-
-    // Vocal Cadence (0-10)
     relatability: null,
     pacing: null,
     enthusiasm: null,
     charisma: null,
   };
 
-  // Try to extract pass/fail for Sacred Foundation
   scores.theologicalFidelity = /theological fidelity[:\s]*pass/i.test(text);
   scores.exegeticalSoundness = /exegetical soundness[:\s]*pass/i.test(text);
   scores.gospelCentrality = /gospel centrality[:\s]*pass/i.test(text);
 
-  // Try to extract numeric scores (look for patterns like "Relevancy: 8" or "Relevancy - 8/10")
   const scorePatterns = {
     relevancy: /relevancy[:\s-]*(\d+)/i,
     clarity: /clarity[:\s-]*(\d+)/i,
@@ -237,6 +228,4 @@ function parseScoresFromResponse(text) {
   return scores;
 }
 
-export default {
-  analyzeSermon,
-};
+export default { analyzeSermon };

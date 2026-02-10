@@ -1,13 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
+import GlossaryPage from './GlossaryPage';
+import EvaluationHistoryPage from './EvaluationHistoryPage';
+import EvaluationSummaryPage from './EvaluationSummaryPage';
+import GuidedTourPage from './GuidedTourPage';
+import LoginPage from './LoginPage';
+import SignUpPage from './SignUpPage';
+import Logo from './components/Logo';
 import { analyzeSermon } from './services/claudeService';
+import { saveEvaluation, getEvaluations } from './services/supabaseService';
 
-// Gradient text style helper - ensures cross-browser compatibility
-const gradientTextStyle = {
-  background: 'linear-gradient(to right, #FF4500, #D12D6F, #8B008B)',
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
-  backgroundClip: 'text',
+// ============================================================================
+// GLOSSARY TERM MAPPING (dashboard key → glossary card ID)
+// ============================================================================
+
+const GLOSSARY_TERM_MAP = {
+  theological_fidelity: 'fidelity',
+  exegetical_soundness: 'exegesis',
+  gospel_centrality: 'gospel-centrality',
+  relevancy: 'relevancy',
+  clarity: 'clarity',
+  connectivity: 'connectivity',
+  precision: 'precision',
+  call_to_action: 'call-to-action',
+  relatability: 'relatability',
+  pacing: 'pacing',
+  enthusiasm: 'enthusiasm',
+  charisma: 'charisma',
 };
+
+// ============================================================================
+// MOCK DATA & UTILITIES
+// ============================================================================
 
 // Color interpolation function for sliders
 const getSliderColor = (value) => {
@@ -17,15 +40,127 @@ const getSliderColor = (value) => {
   return `rgb(${r}, ${g}, ${b})`;
 };
 
-// Spectrum Slider Component
-const SpectrumSlider = ({ label, value, onChange }) => {
+// ============================================================================
+// SHARED COMPONENTS
+// ============================================================================
+
+// Glass Card Component with jump hover effect
+const GlassCard = ({ children, className = '', isCircle = false, noHover = false }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <div
+      className={`relative overflow-hidden ${className}`}
+      style={{
+        background: 'rgba(255, 255, 255, 0.025)',
+        backdropFilter: 'blur(16px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+        borderRadius: isCircle ? '50%' : '60px',
+        transform: (!noHover && isHovered) ? 'translateY(-8px)' : 'translateY(0)',
+        boxShadow: (!noHover && isHovered)
+          ? '0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 69, 0, 0.15)'
+          : '0 4px 12px rgba(0, 0, 0, 0.2)',
+        transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease',
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Gradient border */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          borderRadius: isCircle ? '50%' : '60px',
+          padding: '1px',
+          background: 'linear-gradient(135deg, #FF4500, #D12D6F, #8B008B)',
+          mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+          WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+          maskComposite: 'exclude',
+          WebkitMaskComposite: 'xor',
+          opacity: 0.5
+        }}
+      />
+      {/* Top specular highlight */}
+      <div
+        className="absolute top-0 left-[10%] right-[10%] h-[1px] pointer-events-none z-10"
+        style={{
+          background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.1), transparent)'
+        }}
+      />
+      {/* Left edge specular highlight */}
+      <div
+        className="absolute top-[5%] left-0 bottom-[30%] w-[1px] pointer-events-none z-10"
+        style={{
+          background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.3), transparent)'
+        }}
+      />
+      <div className="relative z-10">{children}</div>
+    </div>
+  );
+};
+
+// Gradient Button with debossing effect
+const GradientButton = ({ children, onClick, className = '', small = false, disabled = false }) => {
+  const [isPressed, setIsPressed] = useState(false);
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseDown={() => setIsPressed(true)}
+      onMouseUp={() => setIsPressed(false)}
+      onMouseLeave={() => setIsPressed(false)}
+      disabled={disabled}
+      className={`relative overflow-hidden text-white font-black uppercase ${className}`}
+      style={{
+        padding: small ? '8px 16px' : '16px 32px',
+        fontSize: small ? '8px' : '12px',
+        letterSpacing: '0.3em',
+        background: isPressed
+          ? 'linear-gradient(90deg, #CC3700 0%, #6B006B 100%)'
+          : 'linear-gradient(90deg, #FF4500 0%, #8B008B 100%)',
+        boxShadow: isPressed
+          ? 'inset 0 4px 8px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(255, 69, 0, 0.2)'
+          : '0 10px 30px -10px rgba(255, 69, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.2)',
+        borderRadius: small ? '20px' : '32px',
+        transform: isPressed ? 'scale(0.96)' : 'scale(1)',
+        transition: 'transform 0.1s ease, box-shadow 0.1s ease, background 0.1s ease',
+        opacity: disabled ? 0.5 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+    >
+      <div
+        className="absolute top-0 left-[10%] right-[10%] h-[1px] pointer-events-none"
+        style={{
+          background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.2), transparent)'
+        }}
+      />
+      {children}
+    </button>
+  );
+};
+
+// Logo imported from shared component
+
+// ============================================================================
+// DASHBOARD COMPONENTS
+// ============================================================================
+
+const SpectrumSlider = ({ label, value, onChange, onLabelClick }) => {
   const color = getSliderColor(value);
   const percentage = (value / 10) * 100;
 
   return (
     <div className="mb-4">
       <div className="flex justify-between items-end mb-2">
-        <label className="font-bold text-[10px] uppercase tracking-[0.2em] text-white">{label}</label>
+        <label className="font-bold text-[10px] uppercase tracking-[0.2em] text-white">
+          {onLabelClick ? (
+            <span
+              onClick={(e) => { e.preventDefault(); onLabelClick(); }}
+              className="cursor-pointer hover:text-[#FF4500] transition-colors border-b border-transparent hover:border-[#FF4500]/50"
+            >
+              {label}
+            </span>
+          ) : label}
+        </label>
         <span
           className="text-[10px] font-black font-mono transition-colors"
           style={{ color, filter: `drop-shadow(0 0 8px ${color})` }}
@@ -39,9 +174,10 @@ const SpectrumSlider = ({ label, value, onChange }) => {
         max="10"
         value={value}
         onChange={(e) => onChange(parseInt(e.target.value))}
-        className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+        className="w-full h-1.5 appearance-none cursor-pointer"
         style={{
           background: `linear-gradient(to right, ${color} ${percentage}%, rgba(255, 255, 255, 0.1) ${percentage}%)`,
+          borderRadius: '9999px',
           '--thumb-color': color
         }}
       />
@@ -49,64 +185,78 @@ const SpectrumSlider = ({ label, value, onChange }) => {
   );
 };
 
-// Checkbox Item Component
-const CheckboxItem = ({ label, subtitle, checked, onToggle }) => (
+const CheckboxItem = ({ label, subtitle, checked, onToggle, onLabelClick }) => (
   <label className="flex items-center gap-3 cursor-pointer group">
     <div
-      className={`relative flex-shrink-0 w-6 h-6 border rounded-lg flex items-center justify-center transition-all ${ checked ? 'border-transparent bg-transparent' : 'border-white/20 bg-black/40 group-hover:border-orange-500/50' }`}
+      className={`relative flex-shrink-0 w-6 h-6 border flex items-center justify-center transition-all ${checked ? 'border-transparent bg-transparent' : 'border-white/20 bg-black/40 group-hover:border-orange-500/50'}`}
+      style={{ borderRadius: '8px' }}
       onClick={onToggle}
     >
       {checked && <span className="text-xl">✅</span>}
     </div>
     <div className="flex flex-col">
-      <span className="font-bold text-white text-xs tracking-tight uppercase">{label}</span>
+      <span className="font-bold text-white text-xs tracking-tight uppercase">
+        {onLabelClick ? (
+          <span
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLabelClick(); }}
+            className="cursor-pointer hover:text-[#FF4500] transition-colors border-b border-transparent hover:border-[#FF4500]/50"
+          >
+            {label}
+          </span>
+        ) : label}
+      </span>
       <span className="text-[8px] text-white/70 uppercase font-bold tracking-widest">{subtitle}</span>
     </div>
   </label>
 );
 
-// Glass Card Component with proper reflective effects and jump hover
-const GlassCard = ({ children, className = '', rounded = '2xl' }) => {
-  const [isHovered, setIsHovered] = React.useState(false);
+const PillContainer = ({ children, className = '', onClick }) => (
+  <div
+    className={`bg-white/5 border border-white/5 ${className}`}
+    style={{ borderRadius: '20px' }}
+    onClick={onClick}
+  >
+    {children}
+  </div>
+);
 
-  return (
-    <div
-      className={`relative overflow-hidden ${rounded === 'full' ? 'rounded-full' : 'rounded-2xl'} ${className} transition-all duration-300 ease-out cursor-pointer`}
+const SectionHeader = ({ number, emoji, title }) => (
+  <div className="flex items-center gap-3 mb-4">
+    {number && <span className="font-black text-lg italic">{number}</span>}
+    {emoji && <span className="text-lg">{emoji}</span>}
+    <h3
+      className="text-sm font-black uppercase tracking-widest italic"
       style={{
-        background: 'rgba(255, 255, 255, 0.025)',
-        backdropFilter: 'blur(16px) saturate(180%)',
-        transform: isHovered ? 'translateY(-8px)' : 'translateY(0)',
-        boxShadow: isHovered
-          ? '0 20px 40px -15px rgba(255, 69, 0, 0.3), 0 10px 20px -10px rgba(139, 0, 139, 0.2)'
-          : '0 0 0 transparent',
+        background: 'linear-gradient(90deg, #FF4500 0%, #D12D6F 50%, #8B008B 100%)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text'
       }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Gradient border */}
-      <div className={`absolute inset-0 ${rounded === 'full' ? 'rounded-full' : 'rounded-2xl'} pointer-events-none transition-opacity duration-300`} style={{
-        padding: '1px',
-        background: 'linear-gradient(135deg, #FF4500, #D12D6F, #8B008B)',
-        mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-        WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-        maskComposite: 'exclude',
-        WebkitMaskComposite: 'xor',
-        opacity: isHovered ? 0.8 : 0.5
-      }} />
-      {/* Top specular highlight */}
-      <div className="absolute top-0 left-[10%] right-[10%] h-[1px] pointer-events-none z-10" style={{
-        background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.1), transparent)'
-      }} />
-      {/* Left edge specular highlight */}
-      <div className="absolute top-[5%] left-0 bottom-[30%] w-[1px] pointer-events-none z-10" style={{
-        background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.3), transparent)'
-      }} />
-      <div className="relative z-10">{children}</div>
-    </div>
-  );
-};
+      {title}
+    </h3>
+  </div>
+);
 
-// AI Pulsing Indicator
+const InputField = ({ label, emoji, type = 'text', placeholder, value, onChange }) => (
+  <div className="flex flex-col gap-2">
+    <label className="text-[8px] font-black text-white tracking-[0.3em] uppercase flex items-center gap-1">
+      <span>{emoji}</span> {label}
+    </label>
+    <input
+      type={type}
+      placeholder={placeholder}
+      value={value}
+      onChange={onChange}
+      className="bg-white/5 border border-white/10 text-white placeholder:text-white/40 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-500/50 [color-scheme:dark]"
+      style={{
+        borderRadius: '16px',
+        padding: '10px 14px',
+      }}
+    />
+  </div>
+);
+
 const AIPulse = () => {
   const [scale, setScale] = useState(1);
 
@@ -119,8 +269,9 @@ const AIPulse = () => {
 
   return (
     <div
-      className="w-2 h-2 rounded-full bg-[#39ff14] transition-transform duration-1000"
+      className="w-2 h-2 bg-[#39ff14] transition-transform duration-1000"
       style={{
+        borderRadius: '50%',
         transform: `scale(${scale})`,
         boxShadow: '0 0 15px rgba(57, 255, 20, 0.6)'
       }}
@@ -128,358 +279,388 @@ const AIPulse = () => {
   );
 };
 
-// Gradient Button with reflective effect and cave-in click
-const GradientButton = ({ children, onClick, className = '' }) => {
-  const [isPressed, setIsPressed] = React.useState(false);
+// ============================================================================
+// WELCOME BACK PAGE (shown to returning users after login)
+// ============================================================================
+
+const WelcomeBackPage = ({ onContinue }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => onContinue(), 2500);
+    return () => clearTimeout(timer);
+  }, [onContinue]);
 
   return (
-    <button
-      onClick={onClick}
-      onMouseDown={() => setIsPressed(true)}
-      onMouseUp={() => setIsPressed(false)}
-      onMouseLeave={() => setIsPressed(false)}
-      onTouchStart={() => setIsPressed(true)}
-      onTouchEnd={() => setIsPressed(false)}
-      className={`relative overflow-hidden text-white px-8 py-4 rounded-2xl font-black text-xs tracking-[0.3em] uppercase transition-all duration-150 hover:scale-105 ${className}`}
+    <div
+      className="min-h-screen flex flex-col items-center justify-center text-white px-6"
       style={{
-        background: isPressed
-          ? 'linear-gradient(90deg, #CC3700 0%, #6B006B 100%)'
-          : 'linear-gradient(90deg, #FF4500 0%, #8B008B 100%)',
-        boxShadow: isPressed
-          ? 'inset 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(255, 69, 0, 0.3)'
-          : '0 10px 30px -10px rgba(255, 69, 0, 0.5)',
-        transform: isPressed ? 'scale(0.97)' : undefined,
+        fontFamily: "'Space Grotesk', sans-serif",
+        background: `radial-gradient(circle at 30% 20%, rgba(255, 69, 0, 0.15) 0%, transparent 40%),
+                     radial-gradient(circle at 70% 80%, rgba(139, 0, 139, 0.2) 0%, transparent 40%),
+                     #050203`,
       }}
     >
-      {/* Top specular highlight - hidden when pressed */}
-      <div
-        className="absolute top-0 left-[10%] right-[10%] h-[1px] pointer-events-none transition-opacity duration-150"
+      <Logo height={56} showLabel={false} />
+      <h1
+        className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight mt-8 mb-3 text-center"
         style={{
-          background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.2), transparent)',
-          opacity: isPressed ? 0 : 1
+          background: 'linear-gradient(90deg, #FF4500 0%, #D12D6F 50%, #8B008B 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
         }}
-      />
-      {children}
-    </button>
+      >
+        Welcome Back
+      </h1>
+      <p className="text-white/50 text-sm font-light text-center max-w-sm">
+        Your scorecard is ready. Let's continue refining your craft.
+      </p>
+      <div className="mt-8 w-8 h-8 border-2 border-[#FF4500] border-t-transparent rounded-full animate-spin opacity-40" />
+    </div>
   );
 };
 
-// Section Header Component
-const SectionHeader = ({ number, emoji, title }) => (
-  <div className="flex items-center gap-3 mb-4">
-    {number && <span className="font-black text-lg italic">{number}</span>}
-    {emoji && <span className="text-lg">{emoji}</span>}
-    <h3 className="text-sm font-black uppercase tracking-widest italic" style={gradientTextStyle}>{title}</h3>
-  </div>
-);
+// ============================================================================
+// MAIN APP WITH PAGE NAVIGATION
+// ============================================================================
 
-// Main App
-export default function GamalielDashboard() {
+export default function GamalielApp() {
+  const [currentPage, setCurrentPage] = useState('login'); // 'login' | 'signup' | 'dashboard' | 'summary' | 'glossary' | 'history' | 'tour' | 'welcome-back'
+  const [glossaryTerm, setGlossaryTerm] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisStatus, setAnalysisStatus] = useState('');
+  const [analysisMilestone, setAnalysisMilestone] = useState('');
+  const [recordedFile, setRecordedFile] = useState(null);
+  const [savedEvaluations, setSavedEvaluations] = useState([]);
+  const fileInputRef = useRef(null);
+
   // Form state
   const [sermonTitle, setSermonTitle] = useState('');
   const [preachDate, setPreachDate] = useState('');
   const [primaryGoal, setPrimaryGoal] = useState('');
   const [mediaType, setMediaType] = useState('voice');
-  const [recordingStatus, setRecordingStatus] = useState('ready'); // 'ready', 'recording', 'stopped'
-
-  // Media & Recording state
-  const [mediaFile, setMediaFile] = useState(null);
-  const [mediaPreviewUrl, setMediaPreviewUrl] = useState(null);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const mediaRecorderRef = useRef(null);
-  const recordedChunksRef = useRef([]);
-  const timerRef = useRef(null);
-  const fileInputRef = useRef(null);
-
-  // AI Analysis state
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [analysisError, setAnalysisError] = useState(null);
-  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [recordingStatus, setRecordingStatus] = useState('ready');
+  const [recordingDuration, setRecordingDuration] = useState(0);
 
   // Sacred Foundation
-  const [theologicalFidelity, setTheologicalFidelity] = useState(false);
-  const [exegeticalSoundness, setExegeticalSoundness] = useState(false);
-  const [gospelCentrality, setGospelCentrality] = useState(false);
+  const [sacredFoundation, setSacredFoundation] = useState({
+    theological_fidelity: false,
+    exegetical_soundness: false,
+    gospel_centrality: false,
+  });
 
-  // Structural Weight (Section 2)
-  const [relevancy, setRelevancy] = useState(0);
-  const [clarity, setClarity] = useState(0);
-  const [connectivity, setConnectivity] = useState(0);
-  const [precision, setPrecision] = useState(0);
-  const [callToAction, setCallToAction] = useState(0);
+  // Structural Weight (Section 2) - 5 criteria
+  const [structuralWeight, setStructuralWeight] = useState({
+    relevancy: 0,
+    clarity: 0,
+    connectivity: 0,
+    precision: 0,
+    call_to_action: 0,
+  });
 
-  // Vocal Cadence (Section 3)
-  const [relatability, setRelatability] = useState(0);
-  const [pacing, setPacing] = useState(0);
-  const [enthusiasm, setEnthusiasm] = useState(0);
-  const [charisma, setCharisma] = useState(0);
+  // Vocal Cadence (Section 3) - 4 criteria
+  const [vocalCadence, setVocalCadence] = useState({
+    relatability: 0,
+    pacing: 0,
+    enthusiasm: 0,
+    charisma: 0,
+  });
+
+  // Evaluator Signature
+  const [evaluatorType, setEvaluatorType] = useState('human'); // 'human' | 'ai'
+  const [evaluatorName, setEvaluatorName] = useState('');
 
   // Post Analysis
-  const [anchoringPoint, setAnchoringPoint] = useState('');
-  const [structuralDrift, setStructuralDrift] = useState('');
-  const [measurableStep, setMeasurableStep] = useState('');
+  const [postAnalysis, setPostAnalysis] = useState({
+    anchoring_point: '',
+    structural_drift: '',
+    measurable_step: '',
+  });
 
   // Calculate total score
-  const totalScore = relevancy + clarity + connectivity + precision + callToAction +
-    relatability + pacing + enthusiasm + charisma;
+  const totalScore = Object.values(structuralWeight).reduce((a, b) => a + b, 0) +
+    Object.values(vocalCadence).reduce((a, b) => a + b, 0);
 
-  // Format recording time as MM:SS
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Handle file upload
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setMediaFile(file);
-      setMediaPreviewUrl(URL.createObjectURL(file));
-      setRecordingStatus('stopped');
-      // Auto-detect media type
-      if (file.type.startsWith('video/')) {
-        setMediaType('video');
-      } else {
-        setMediaType('voice');
-      }
-    }
-  };
-
-  // Start recording
-  const startRecording = async () => {
-    try {
-      const constraints = mediaType === 'video'
-        ? { audio: true, video: true }
-        : { audio: true };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-      const mimeType = mediaType === 'video' ? 'video/webm' : 'audio/webm';
-      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
-      recordedChunksRef.current = [];
-
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          recordedChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(recordedChunksRef.current, { type: mimeType });
-        const file = new File([blob], `sermon-recording.${mediaType === 'video' ? 'webm' : 'webm'}`, { type: mimeType });
-        setMediaFile(file);
-        setMediaPreviewUrl(URL.createObjectURL(blob));
-
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      mediaRecorderRef.current.start();
-      setRecordingStatus('recording');
-      setRecordingTime(0);
-
-      // Start timer
-      timerRef.current = setInterval(() => {
-        setRecordingTime(t => t + 1);
-      }, 1000);
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      alert('Could not access microphone/camera. Please check permissions.');
-    }
-  };
-
-  // Stop recording
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && recordingStatus === 'recording') {
-      mediaRecorderRef.current.stop();
-      setRecordingStatus('stopped');
-      clearInterval(timerRef.current);
-    }
-  };
-
-  // Toggle recording
-  const toggleRecording = () => {
-    if (recordingStatus === 'recording') {
-      stopRecording();
-    } else {
-      startRecording();
-    }
-  };
-
-  // Clear media
-  const clearMedia = () => {
-    setMediaFile(null);
-    setMediaPreviewUrl(null);
-    setRecordingStatus('ready');
-    setRecordingTime(0);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  // Run AI analysis
-  const runAnalysis = async () => {
-    if (!mediaFile) {
-      alert('Please upload or record a sermon first.');
-      return;
-    }
-
+  // Gamaliel AI Analysis - uses real Claude API when a file is uploaded
+  const runAnalysis = async (file) => {
     setIsAnalyzing(true);
-    setAnalysisError(null);
-    setShowAnalysisModal(true);
+    setAnalysisMilestone('');
 
     try {
-      const result = await analyzeSermon(mediaFile, {
+      setAnalysisStatus('Preparing sermon recording...');
+      setAnalysisMilestone('Gamaliel is reading your sermon file...');
+      await new Promise(r => setTimeout(r, 1000));
+
+      setAnalysisStatus('Uploading to Gamaliel AI...');
+      setAnalysisMilestone('Encoding audio/video for cloud analysis...');
+      await new Promise(r => setTimeout(r, 800));
+
+      setAnalysisStatus('Analyzing with Gamaliel AI...');
+      setAnalysisMilestone('Gamaliel is listening to your sermon and evaluating delivery...');
+
+      // Start a milestone ticker while waiting for Claude
+      const milestones = [
+        'Evaluating theological fidelity and exegetical soundness...',
+        'Scoring structural weight: relevancy, clarity, connectivity...',
+        'Assessing vocal cadence: pacing, enthusiasm, charisma...',
+        'Identifying anchoring points and structural drift...',
+        'Crafting your personalized improvement step...',
+        'Almost done — finalizing your Homiletics Index...',
+      ];
+      let milestoneIndex = 0;
+      const milestoneInterval = setInterval(() => {
+        if (milestoneIndex < milestones.length) {
+          setAnalysisMilestone(milestones[milestoneIndex]);
+          milestoneIndex++;
+        }
+      }, 5000);
+
+      const result = await analyzeSermon(file, {
         title: sermonTitle,
         goal: primaryGoal,
         date: preachDate,
       });
 
-      setAnalysisResult(result);
+      clearInterval(milestoneInterval);
 
-      // Auto-fill scores from AI analysis
-      if (result.scores) {
-        const s = result.scores;
-        // Sacred Foundation
-        if (s.theologicalFidelity !== null) setTheologicalFidelity(s.theologicalFidelity);
-        if (s.exegeticalSoundness !== null) setExegeticalSoundness(s.exegeticalSoundness);
-        if (s.gospelCentrality !== null) setGospelCentrality(s.gospelCentrality);
-        // Structural Weight
-        if (s.relevancy !== null) setRelevancy(s.relevancy);
-        if (s.clarity !== null) setClarity(s.clarity);
-        if (s.connectivity !== null) setConnectivity(s.connectivity);
-        if (s.precision !== null) setPrecision(s.precision);
-        if (s.callToAction !== null) setCallToAction(s.callToAction);
-        // Vocal Cadence
-        if (s.relatability !== null) setRelatability(s.relatability);
-        if (s.pacing !== null) setPacing(s.pacing);
-        if (s.enthusiasm !== null) setEnthusiasm(s.enthusiasm);
-        if (s.charisma !== null) setCharisma(s.charisma);
-      }
+      setAnalysisStatus('Processing results...');
+      setAnalysisMilestone('Mapping scores to your scorecard...');
+      await new Promise(r => setTimeout(r, 500));
+
+      // Apply parsed scores from Claude's response
+      const s = result.scores;
+      setSacredFoundation({
+        theological_fidelity: s.theologicalFidelity ?? false,
+        exegetical_soundness: s.exegeticalSoundness ?? false,
+        gospel_centrality: s.gospelCentrality ?? false,
+      });
+
+      setStructuralWeight({
+        relevancy: s.relevancy ?? 0,
+        clarity: s.clarity ?? 0,
+        connectivity: s.connectivity ?? 0,
+        precision: s.precision ?? 0,
+        call_to_action: s.callToAction ?? 0,
+      });
+
+      setVocalCadence({
+        relatability: s.relatability ?? 0,
+        pacing: s.pacing ?? 0,
+        enthusiasm: s.enthusiasm ?? 0,
+        charisma: s.charisma ?? 0,
+      });
+
+      // Extract post-analysis sections from the full analysis text
+      const analysis = result.fullAnalysis;
+      const anchoringMatch = analysis.match(/### Anchoring Point[^\n]*\n([\s\S]*?)(?=###|$)/i);
+      const driftMatch = analysis.match(/### Structural Drift[^\n]*\n([\s\S]*?)(?=###|$)/i);
+      const stepMatch = analysis.match(/### Measurable Step[^\n]*\n([\s\S]*?)(?=###|$)/i);
+
+      setPostAnalysis({
+        anchoring_point: anchoringMatch ? anchoringMatch[1].trim() : '',
+        structural_drift: driftMatch ? driftMatch[1].trim() : '',
+        measurable_step: stepMatch ? stepMatch[1].trim() : '',
+      });
+
+      // Auto-set evaluator to AI Gamaliel
+      setEvaluatorType('ai');
+      setEvaluatorName('Gamaliel');
+
+      setAnalysisStatus('Analysis complete!');
+      setAnalysisMilestone('Your scorecard has been filled in by Gamaliel.');
     } catch (error) {
-      console.error('Analysis error:', error);
-      setAnalysisError(error.message);
-    } finally {
-      setIsAnalyzing(false);
+      setAnalysisStatus(`Error: ${error.message}`);
+      setAnalysisMilestone('');
+      await new Promise(r => setTimeout(r, 4000));
+    }
+
+    await new Promise(r => setTimeout(r, 800));
+    setIsAnalyzing(false);
+    setAnalysisStatus('');
+    setAnalysisMilestone('');
+  };
+
+  // Trigger file picker when AI Assistant button is clicked
+  const handleGamalielAnalysis = () => {
+    if (recordedFile) {
+      runAnalysis(recordedFile);
+    } else {
+      fileInputRef.current?.click();
     }
   };
 
-  return (
-    <div className="min-h-screen text-white font-sans selection:bg-orange-500/30" style={{
-      background: `radial-gradient(circle at 10% 10%, rgba(255, 69, 0, 0.12) 0%, transparent 40%), radial-gradient(circle at 90% 90%, rgba(139, 0, 139, 0.12) 0%, transparent 40%), radial-gradient(circle at 50% 50%, rgba(57, 255, 20, 0.02) 0%, transparent 50%), #070304`
-    }}>
+  // Handle file selection for sermon upload
+  const handleFileSelected = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setRecordedFile(file);
+      runAnalysis(file);
+    }
+  };
+
+  // Save evaluation to Supabase + local state
+  const saveCurrentEvaluation = async () => {
+    const evaluator = { type: evaluatorType, name: evaluatorType === 'ai' ? 'Gamaliel' : evaluatorName };
+    const evalData = {
+      sermonTitle, preachDate, primaryGoal,
+      sacredFoundation, structuralWeight, vocalCadence, postAnalysis,
+      totalScore, evaluator,
+    };
+
+    // Save to Supabase
+    try {
+      await saveEvaluation(evalData);
+    } catch (err) {
+      console.warn('Supabase save skipped:', err.message);
+    }
+
+    // Always save to local state for history page
+    setSavedEvaluations(prev => [{
+      total_score: totalScore,
+      sermon_title: sermonTitle || 'Untitled Sermon',
+      created_at: new Date().toISOString(),
+      evaluator_type: evaluator.type,
+      evaluator_name: evaluator.name,
+      structural_weight: structuralWeight,
+      vocal_cadence: vocalCadence,
+    }, ...prev]);
+  };
+
+  // Handle Calculate Score - saves and navigates to summary
+  const handleCalculateScore = async () => {
+    await saveCurrentEvaluation();
+    setCurrentPage('summary');
+    window.scrollTo(0, 0);
+  };
+
+  // Handle Save button - saves and clears the scorecard
+  const handleSave = async () => {
+    if (totalScore === 0 && !sermonTitle) return;
+    await saveCurrentEvaluation();
+    resetScorecard();
+  };
+
+  // Reset scorecard fields to blank
+  const resetScorecard = () => {
+    setSermonTitle('');
+    setPreachDate('');
+    setPrimaryGoal('');
+    setSacredFoundation({ theological_fidelity: false, exegetical_soundness: false, gospel_centrality: false });
+    setStructuralWeight({ relevancy: 0, clarity: 0, connectivity: 0, precision: 0, call_to_action: 0 });
+    setVocalCadence({ relatability: 0, pacing: 0, enthusiasm: 0, charisma: 0 });
+    setPostAnalysis({ anchoring_point: '', structural_drift: '', measurable_step: '' });
+    setRecordingStatus('ready');
+    setRecordedFile(null);
+    setEvaluatorType('human');
+    setEvaluatorName('');
+  };
+
+  // Reset and return to dashboard
+  const handleNewEvaluation = () => {
+    resetScorecard();
+    setCurrentPage('dashboard');
+    window.scrollTo(0, 0);
+  };
+
+  // Load evaluations from Supabase for history page
+  const loadEvaluations = async () => {
+    try {
+      const data = await getEvaluations();
+      setSavedEvaluations(data);
+    } catch {
+      console.warn('Could not load evaluations from Supabase. Using mock data.');
+    }
+  };
+
+  // Navigate to glossary, optionally scrolling to a specific term
+  const navigateToGlossary = (termKey) => {
+    setGlossaryTerm(termKey ? GLOSSARY_TERM_MAP[termKey] || null : null);
+    setCurrentPage('glossary');
+  };
+
+  // Navigate to login page (used by Logo onClick on all pages)
+  const navigateToLogin = () => {
+    setCurrentPage('login');
+    window.scrollTo(0, 0);
+  };
+
+  // Auth handlers (placeholder — wire to Supabase auth as needed)
+  const handleLogin = async (email, password) => {
+    // TODO: Replace with Supabase auth: const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const hasVisited = localStorage.getItem('gamaliel_visited');
+    if (hasVisited) {
+      // Returning user — show "Welcome Back" then go to dashboard
+      setCurrentPage('welcome-back');
+      window.scrollTo(0, 0);
+    } else {
+      // New user — go to guided tour
+      localStorage.setItem('gamaliel_visited', 'true');
+      setCurrentPage('tour');
+      window.scrollTo(0, 0);
+    }
+  };
+
+  const handleSignUp = async (fullName, email, password) => {
+    // TODO: Replace with Supabase auth: const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
+    // New user — always go to guided tour
+    localStorage.setItem('gamaliel_visited', 'true');
+    setCurrentPage('tour');
+    window.scrollTo(0, 0);
+  };
+
+  // ============================================================================
+  // RENDER DASHBOARD PAGE
+  // ============================================================================
+
+  const renderDashboard = () => (
+    <>
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-white/5 bg-[#070304]/80 backdrop-blur-2xl">
+      <header className="sticky top-0 z-50 border-b border-white/5 bg-[#070304]/80 backdrop-blur-2xl safe-top">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-serif italic font-bold">SI</span>
-            <div className="h-4 w-px bg-white/20 mx-1" />
-            <span className="text-[8px] font-black tracking-[0.3em] uppercase">Scribe Inc.</span>
+          <Logo height={28} onClick={navigateToLogin} />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { setCurrentPage('tour'); }}
+              className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-[#FF4500] transition-colors uppercase"
+            >
+              TOUR
+            </button>
+            <button
+              onClick={() => { loadEvaluations(); setCurrentPage('history'); }}
+              className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-[#FF4500] transition-colors uppercase"
+            >
+              HISTORY
+            </button>
+            <button
+              onClick={() => navigateToGlossary()}
+              className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-[#FF4500] transition-colors uppercase"
+            >
+              LEXICON
+            </button>
+            <GradientButton small onClick={handleSave}>SAVE</GradientButton>
           </div>
-          <GradientButton className="!py-2 !px-4 !text-[8px] !rounded-lg">
-            SAVE
-          </GradientButton>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-8">
-        {/* Hero Section with Logo */}
-        <section className="mb-8 flex flex-col items-center text-center">
-          {/* App Logo with 3D Glass Effect */}
-          <div
-            className="relative overflow-hidden rounded-3xl mb-4 transition-all duration-300 ease-out hover:-translate-y-2"
-            style={{
-              background: 'rgba(255, 255, 255, 0.03)',
-              backdropFilter: 'blur(20px) saturate(180%)',
-              boxShadow: '0 8px 32px -8px rgba(255, 69, 0, 0.2), 0 4px 16px -4px rgba(139, 0, 139, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.1)',
-              padding: '20px 30px',
-            }}
-          >
-            {/* Gradient border effect */}
-            <div className="absolute inset-0 rounded-3xl pointer-events-none" style={{
-              padding: '1px',
-              background: 'linear-gradient(135deg, rgba(255, 69, 0, 0.5), rgba(209, 45, 111, 0.5), rgba(139, 0, 139, 0.5))',
-              mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-              WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-              maskComposite: 'exclude',
-              WebkitMaskComposite: 'xor',
-            }} />
-            {/* Top specular highlight */}
-            <div className="absolute top-0 left-[15%] right-[15%] h-[1px] pointer-events-none" style={{
-              background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.15), transparent)'
-            }} />
-            {/* Left edge specular highlight */}
-            <div className="absolute top-[10%] left-0 bottom-[40%] w-[1px] pointer-events-none" style={{
-              background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.25), transparent)'
-            }} />
-            {/* Logo Image */}
-            <img
-              src="/Applogo.png"
-              alt="Gamaliel - Homiletics Scorecard"
-              className="relative z-10 h-24 md:h-32 w-auto object-contain"
-              style={{
-                filter: 'drop-shadow(0 4px 12px rgba(255, 69, 0, 0.3))'
-              }}
-              onError={(e) => {
-                // Fallback to text if logo not found
-                e.target.style.display = 'none';
-                e.target.nextElementSibling.style.display = 'block';
-              }}
-            />
-            {/* Fallback text if logo doesn't load */}
-            <div className="hidden text-center">
-              <h1 className="text-3xl md:text-4xl font-black leading-[1.1] tracking-tighter uppercase">
-                <span style={gradientTextStyle}>HOMILETICS</span>
-                <br />
-                <span className="text-[#FF4500]">SCORECARD</span>
-              </h1>
-            </div>
-          </div>
-          <p className="text-white/70 text-sm font-light leading-relaxed max-w-md">
+        {/* Hero Section */}
+        <section className="mb-8">
+          <h1 className="text-4xl md:text-5xl font-black leading-[1.1] tracking-tighter uppercase mb-3">
+            <span style={{
+              background: 'linear-gradient(90deg, #FF4500 0%, #D12D6F 50%, #8B008B 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}>SCORECARD</span>
+          </h1>
+          <p style={{ color: 'rgba(255,255,255,0.7)' }} className="text-sm font-light leading-relaxed max-w-md">
             Premium digital analysis of sermon weight, structure, and delivery. Designed for intentional preachers.
           </p>
         </section>
 
         {/* Sermon Info Card */}
         <GlassCard className="mb-6">
-          <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-[8px] font-black text-white tracking-[0.3em] uppercase flex items-center gap-1">
-                <span>📖</span> Sermon Title/Text
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Romans 8:1-4"
-                value={sermonTitle}
-                onChange={(e) => setSermonTitle(e.target.value)}
-                className="bg-white/5 border border-white/10 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-orange-500/50 text-white placeholder:text-white/40 text-xs font-mono"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-[8px] font-black text-white tracking-[0.3em] uppercase flex items-center gap-1">
-                <span>📅</span> Preach Date
-              </label>
-              <input
-                type="date"
-                value={preachDate}
-                onChange={(e) => setPreachDate(e.target.value)}
-                className="bg-white/5 border border-white/10 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-orange-500/50 text-white text-xs font-mono [color-scheme:dark]"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-[8px] font-black text-white tracking-[0.3em] uppercase flex items-center gap-1">
-                <span>🎯</span> Primary Goal
-              </label>
-              <input
-                type="text"
-                placeholder="The core objective"
-                value={primaryGoal}
-                onChange={(e) => setPrimaryGoal(e.target.value)}
-                className="bg-white/5 border border-white/10 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-orange-500/50 text-white placeholder:text-white/40 text-xs font-mono"
-              />
-            </div>
+          <div className="px-8 py-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <InputField label="Sermon Title/Text" emoji="📖" placeholder="e.g. Romans 8:1-4" value={sermonTitle} onChange={(e) => setSermonTitle(e.target.value)} />
+            <InputField label="Preach Date" emoji="📅" type="date" value={preachDate} onChange={(e) => setPreachDate(e.target.value)} />
+            <InputField label="Primary Goal" emoji="🎯" placeholder="The core objective" value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)} />
           </div>
         </GlassCard>
 
@@ -487,110 +668,101 @@ export default function GamalielDashboard() {
         <section className="mb-6">
           <SectionHeader emoji="📹" title="Digital Capture" />
           <GlassCard>
-            <div className="p-5">
+            <div className="px-8 py-6">
               <div className="flex flex-col gap-4">
                 <div>
-                  <h4 className="text-sm font-bold tracking-tight uppercase" style={gradientTextStyle}>Sermon Recording</h4>
-                  <p className="text-[10px] text-white/70 leading-relaxed mt-1">Upload a recording or record directly. Gamaliel will analyze your sermon delivery.</p>
+                  <h4 className="text-sm font-bold tracking-tight uppercase" style={{
+                    background: 'linear-gradient(90deg, #FF4500 0%, #D12D6F 50%, #8B008B 100%)',
+                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                  }}>Sermon Recording</h4>
+                  <p style={{ color: 'rgba(255,255,255,0.7)' }} className="text-[10px] leading-relaxed mt-1">
+                    Record your sermon (max 60 min). Gamaliel AI will transcribe and analyze automatically.
+                  </p>
                 </div>
 
-                {/* Upload & Record Options */}
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* File Upload Button */}
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                    accept="audio/*,video/*"
-                    className="hidden"
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-2 bg-white/5 rounded-xl px-4 py-2.5 border border-white/10 hover:border-orange-500/50 transition-all"
-                  >
-                    <span className="text-lg">📁</span>
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-white">Upload File</span>
-                  </button>
+                {/* Hidden file input for sermon upload */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="audio/*,video/*"
+                  onChange={handleFileSelected}
+                  className="hidden"
+                />
 
-                  {/* Media Type Toggle */}
-                  <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/5">
-                    <button
-                      onClick={() => setMediaType('voice')}
-                      className={`flex items-center gap-1 transition-colors ${mediaType === 'voice' ? 'text-[#FF4500]' : 'text-white/60 hover:text-white'}`}
-                    >
-                      <span className="text-sm">🎙️</span>
-                      <span className="text-[8px] font-bold uppercase tracking-wider">Voice</span>
-                    </button>
-                    <div className="w-px h-4 bg-white/10" />
-                    <button
-                      onClick={() => setMediaType('video')}
-                      className={`flex items-center gap-1 transition-colors ${mediaType === 'video' ? 'text-[#FF4500]' : 'text-white/60 hover:text-white'}`}
-                    >
-                      <span className="text-sm">📹</span>
-                      <span className="text-[8px] font-bold uppercase tracking-wider">Video</span>
-                    </button>
+                {/* Upload status indicator */}
+                {recordedFile && !isAnalyzing && (
+                  <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2">
+                    <span className="text-[9px] font-mono text-white/60">
+                      📁 {recordedFile.name}
+                    </span>
                   </div>
+                )}
 
-                  {/* Record Button */}
-                  <button
-                    onClick={toggleRecording}
-                    className="w-10 h-10 rounded-full border-2 border-orange-500/30 flex items-center justify-center active:scale-90 transition-transform"
-                  >
-                    <div className={`bg-[#FF4500] ${recordingStatus === 'recording' ? 'w-3 h-3 rounded-sm' : 'w-4 h-4 rounded-full'}`} style={{
-                      boxShadow: '0 0 12px #FF4500'
-                    }} />
-                  </button>
-                  <span className="text-[8px] text-white uppercase font-black tracking-[0.3em]">
-                    {recordingStatus === 'recording' ? formatTime(recordingTime) : recordingStatus === 'stopped' ? 'Done' : 'Record'}
-                  </span>
-                </div>
-
-                {/* Media Preview */}
-                {mediaFile && (
-                  <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-white/70">
-                        {mediaFile.type.startsWith('video/') ? '📹' : '🎙️'} {mediaFile.name}
-                      </span>
-                      <button
-                        onClick={clearMedia}
-                        className="text-[8px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300"
-                      >
-                        ✕ Remove
-                      </button>
+                {/* Analysis Status with Milestones */}
+                {isAnalyzing && (
+                  <div className="bg-[#39ff14]/10 border border-[#39ff14]/30 rounded-xl px-4 py-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 border-2 border-[#39ff14] border-t-transparent rounded-full animate-spin" />
+                      <span className="text-[10px] font-mono text-[#39ff14] font-bold">{analysisStatus}</span>
                     </div>
-                    {mediaPreviewUrl && (
-                      mediaFile.type.startsWith('video/') ? (
-                        <video src={mediaPreviewUrl} controls className="w-full rounded-lg max-h-48" />
-                      ) : (
-                        <audio src={mediaPreviewUrl} controls className="w-full" />
-                      )
+                    {analysisMilestone && (
+                      <p className="text-[9px] font-mono text-white/50 pl-7 leading-relaxed italic">
+                        {analysisMilestone}
+                      </p>
                     )}
                   </div>
                 )}
 
-                {/* AI Assistant Button */}
-                <button
-                  onClick={runAnalysis}
-                  disabled={!mediaFile || isAnalyzing}
-                  className={`flex items-center gap-3 rounded-xl px-4 py-3 border transition-all ${
-                    mediaFile && !isAnalyzing
-                      ? 'bg-[#39ff14]/10 border-[#39ff14]/30 hover:border-[#39ff14]/60 cursor-pointer'
-                      : 'bg-white/5 border-white/5 opacity-50 cursor-not-allowed'
-                  }`}
-                >
-                  <div className="flex flex-col flex-1 text-left">
-                    <span className="text-[8px] font-mono font-bold text-[#39ff14] uppercase tracking-[0.2em]">🤖 Gamaliel AI Assistant</span>
-                    <span className="text-white text-[10px] font-mono font-bold uppercase tracking-widest mt-0.5">
-                      {isAnalyzing ? 'Analyzing Sermon...' : mediaFile ? 'Start AI Analysis' : 'Upload or Record First'}
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* AI Assistant Button */}
+                  <PillContainer
+                    className="flex items-center gap-3 px-4 py-2.5 hover:border-[#39ff14]/30 transition-all cursor-pointer flex-1 min-w-[200px]"
+                    onClick={handleGamalielAnalysis}
+                  >
+                    <div className="flex flex-col flex-1">
+                      <span className="text-[7px] font-mono font-bold text-[#39ff14] uppercase tracking-[0.2em]">🤖 Gamaliel AI Assistant</span>
+                      <span className="text-white text-[9px] font-mono font-bold uppercase tracking-widest mt-0.5">
+                        {isAnalyzing ? 'Analyzing...' : 'Start AI Analysis'}
+                      </span>
+                    </div>
+                    <AIPulse />
+                  </PillContainer>
+
+                  {/* Recording Controls */}
+                  <div className="flex items-center gap-3">
+                    <PillContainer className="flex items-center gap-2 px-3 py-2.5">
+                      <button onClick={() => setMediaType('voice')} className={`flex items-center gap-1 transition-colors ${mediaType === 'voice' ? 'text-[#FF4500]' : 'text-white/60 hover:text-white'}`}>
+                        <span className="text-sm">🎙️</span>
+                        <span className="text-[8px] font-bold uppercase tracking-wider">Voice</span>
+                      </button>
+                      <div className="w-px h-4 bg-white/10" />
+                      <button onClick={() => setMediaType('video')} className={`flex items-center gap-1 transition-colors ${mediaType === 'video' ? 'text-[#FF4500]' : 'text-white/60 hover:text-white'}`}>
+                        <span className="text-sm">📹</span>
+                        <span className="text-[8px] font-bold uppercase tracking-wider">Video</span>
+                      </button>
+                    </PillContainer>
+
+                    <button
+                      onClick={() => setRecordingStatus(recordingStatus === 'ready' ? 'recording' : 'ready')}
+                      className="w-9 h-9 border-2 border-orange-500/30 flex items-center justify-center transition-all duration-100"
+                      style={{
+                        borderRadius: '50%',
+                        transform: recordingStatus === 'recording' ? 'scale(0.95)' : 'scale(1)',
+                        boxShadow: recordingStatus === 'recording' ? 'inset 0 2px 4px rgba(0, 0, 0, 0.3)' : '0 2px 8px rgba(255, 69, 0, 0.2)'
+                      }}
+                    >
+                      <div className="bg-[#FF4500]" style={{
+                        width: recordingStatus === 'recording' ? '10px' : '16px',
+                        height: recordingStatus === 'recording' ? '10px' : '16px',
+                        borderRadius: recordingStatus === 'recording' ? '2px' : '50%',
+                        boxShadow: '0 0 12px #FF4500'
+                      }} />
+                    </button>
+                    <span className="text-[8px] text-white uppercase font-black tracking-[0.3em]">
+                      {recordingStatus === 'recording' ? 'REC' : 'Ready'}
                     </span>
                   </div>
-                  {isAnalyzing ? (
-                    <div className="w-4 h-4 border-2 border-[#39ff14] border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <AIPulse />
-                  )}
-                </button>
+                </div>
               </div>
             </div>
           </GlassCard>
@@ -600,55 +772,37 @@ export default function GamalielDashboard() {
         <section className="mb-6">
           <SectionHeader number="1️⃣" title="Sacred Foundation" />
           <GlassCard>
-            <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <CheckboxItem
-                label="Theological Fidelity"
-                subtitle="Doctrinal accuracy"
-                checked={theologicalFidelity}
-                onToggle={() => setTheologicalFidelity(!theologicalFidelity)}
-              />
-              <CheckboxItem
-                label="Exegetical Soundness"
-                subtitle="Contextual integrity"
-                checked={exegeticalSoundness}
-                onToggle={() => setExegeticalSoundness(!exegeticalSoundness)}
-              />
-              <CheckboxItem
-                label="Gospel Centrality"
-                subtitle="Christ-focused"
-                checked={gospelCentrality}
-                onToggle={() => setGospelCentrality(!gospelCentrality)}
-              />
+            <div className="px-8 py-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <CheckboxItem label="Theological Fidelity" subtitle="Doctrinal accuracy" checked={sacredFoundation.theological_fidelity} onToggle={() => setSacredFoundation(p => ({...p, theological_fidelity: !p.theological_fidelity}))} onLabelClick={() => navigateToGlossary('theological_fidelity')} />
+              <CheckboxItem label="Exegetical Soundness" subtitle="Contextual integrity" checked={sacredFoundation.exegetical_soundness} onToggle={() => setSacredFoundation(p => ({...p, exegetical_soundness: !p.exegetical_soundness}))} onLabelClick={() => navigateToGlossary('exegetical_soundness')} />
+              <CheckboxItem label="Gospel Centrality" subtitle="Christ-focused" checked={sacredFoundation.gospel_centrality} onToggle={() => setSacredFoundation(p => ({...p, gospel_centrality: !p.gospel_centrality}))} onLabelClick={() => navigateToGlossary('gospel_centrality')} />
             </div>
           </GlassCard>
         </section>
 
         {/* Sections 2 & 3 Side by Side */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          {/* Section 2: Structural Weight */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <section className="min-w-0">
             <SectionHeader number="2️⃣" title="Structural Weight" />
-            <GlassCard className="h-auto">
-              <div className="p-4">
-                <SpectrumSlider label="Relevancy" value={relevancy} onChange={setRelevancy} />
-                <SpectrumSlider label="Clarity" value={clarity} onChange={setClarity} />
-                <SpectrumSlider label="Connectivity" value={connectivity} onChange={setConnectivity} />
-                <SpectrumSlider label="Precision" value={precision} onChange={setPrecision} />
-                <SpectrumSlider label="Call to Action" value={callToAction} onChange={setCallToAction} />
+            <GlassCard>
+              <div className="px-8 py-6">
+                <SpectrumSlider label="Relevancy" value={structuralWeight.relevancy} onChange={(v) => setStructuralWeight(p => ({...p, relevancy: v}))} onLabelClick={() => navigateToGlossary('relevancy')} />
+                <SpectrumSlider label="Clarity" value={structuralWeight.clarity} onChange={(v) => setStructuralWeight(p => ({...p, clarity: v}))} onLabelClick={() => navigateToGlossary('clarity')} />
+                <SpectrumSlider label="Connectivity" value={structuralWeight.connectivity} onChange={(v) => setStructuralWeight(p => ({...p, connectivity: v}))} onLabelClick={() => navigateToGlossary('connectivity')} />
+                <SpectrumSlider label="Precision" value={structuralWeight.precision} onChange={(v) => setStructuralWeight(p => ({...p, precision: v}))} onLabelClick={() => navigateToGlossary('precision')} />
+                <SpectrumSlider label="Call to Action" value={structuralWeight.call_to_action} onChange={(v) => setStructuralWeight(p => ({...p, call_to_action: v}))} onLabelClick={() => navigateToGlossary('call_to_action')} />
               </div>
             </GlassCard>
           </section>
 
-          {/* Section 3: Vocal Cadence */}
           <section className="min-w-0">
             <SectionHeader number="3️⃣" title="Vocal Cadence" />
-            <GlassCard className="h-auto">
-              <div className="p-4">
-                <SpectrumSlider label="Relatability" value={relatability} onChange={setRelatability} />
-                <SpectrumSlider label="Pacing" value={pacing} onChange={setPacing} />
-                <SpectrumSlider label="Enthusiasm" value={enthusiasm} onChange={setEnthusiasm} />
-                <SpectrumSlider label="Charisma" value={charisma} onChange={setCharisma} />
-                {/* Spacer to match height with Section 2 */}
+            <GlassCard>
+              <div className="px-8 py-6">
+                <SpectrumSlider label="Relatability" value={vocalCadence.relatability} onChange={(v) => setVocalCadence(p => ({...p, relatability: v}))} onLabelClick={() => navigateToGlossary('relatability')} />
+                <SpectrumSlider label="Pacing" value={vocalCadence.pacing} onChange={(v) => setVocalCadence(p => ({...p, pacing: v}))} onLabelClick={() => navigateToGlossary('pacing')} />
+                <SpectrumSlider label="Enthusiasm" value={vocalCadence.enthusiasm} onChange={(v) => setVocalCadence(p => ({...p, enthusiasm: v}))} onLabelClick={() => navigateToGlossary('enthusiasm')} />
+                <SpectrumSlider label="Charisma" value={vocalCadence.charisma} onChange={(v) => setVocalCadence(p => ({...p, charisma: v}))} onLabelClick={() => navigateToGlossary('charisma')} />
                 <div className="h-[52px]"></div>
               </div>
             </GlassCard>
@@ -657,160 +811,159 @@ export default function GamalielDashboard() {
 
         {/* Critical Post-Analysis */}
         <section className="mb-6">
-          <h3 className="text-base font-black uppercase tracking-[0.2em] italic text-center mb-4" style={gradientTextStyle}>Critical Post-Analysis</h3>
+          <h3 className="text-base font-black uppercase tracking-[0.2em] italic text-center mb-4" style={{
+            background: 'linear-gradient(90deg, #FF4500 0%, #D12D6F 50%, #8B008B 100%)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+          }}>Critical Post-Analysis</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <GlassCard className="h-full">
-              <div className="p-4 h-full flex flex-col">
-                <label className="text-[8px] font-black text-white tracking-[0.3em] uppercase flex items-center gap-1 mb-2">
-                  <span className="text-amber-400">⚡</span> Anchoring Point
-                </label>
-                <textarea
-                  placeholder="Describe the most impactful segment..."
-                  value={anchoringPoint}
-                  onChange={(e) => setAnchoringPoint(e.target.value)}
-                  className="flex-1 bg-transparent border-0 focus:ring-0 focus:outline-none text-white placeholder:text-white/20 resize-none text-xs font-light font-mono min-h-[80px]"
-                />
-              </div>
-            </GlassCard>
-            <GlassCard className="h-full">
-              <div className="p-4 h-full flex flex-col">
-                <label className="text-[8px] font-black text-white tracking-[0.3em] uppercase flex items-center gap-1 mb-2">
-                  <span className="text-blue-400">📉</span> Structural Drift
-                </label>
-                <textarea
-                  placeholder="Identify loss of focus..."
-                  value={structuralDrift}
-                  onChange={(e) => setStructuralDrift(e.target.value)}
-                  className="flex-1 bg-transparent border-0 focus:ring-0 focus:outline-none text-white placeholder:text-white/20 resize-none text-xs font-light font-mono min-h-[80px]"
-                />
-              </div>
-            </GlassCard>
-            <GlassCard className="h-full">
-              <div className="p-4 h-full flex flex-col">
-                <label className="text-[8px] font-black text-white tracking-[0.3em] uppercase flex items-center gap-1 mb-2">
-                  <span className="text-emerald-400">✅</span> Measurable Step
-                </label>
-                <textarea
-                  placeholder="Specific improvement task..."
-                  value={measurableStep}
-                  onChange={(e) => setMeasurableStep(e.target.value)}
-                  className="flex-1 bg-transparent border-0 focus:ring-0 focus:outline-none text-white placeholder:text-white/20 resize-none text-xs font-light font-mono min-h-[80px]"
-                />
-              </div>
-            </GlassCard>
-          </div>
-        </section>
-
-        {/* Calculate Score Section - Centered */}
-        <section className="flex flex-col items-center justify-center py-6 mb-6">
-          <GradientButton onClick={() => console.log('Calculate:', totalScore)}>
-            CALCULATE SCORE
-          </GradientButton>
-        </section>
-
-        {/* Glossary */}
-        <GlassCard className="mb-8">
-          <h4 className="text-base font-black uppercase tracking-widest italic text-center pt-5 mb-4" style={gradientTextStyle}>Glossary</h4>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-5 pt-0">
             {[
-              { term: 'Fidelity', def: 'Precise adherence to the original intent of the biblical author.' },
-              { term: 'Exegesis', def: 'Drawing meaning from the text, never reading into it.' },
-              { term: 'Precision', def: 'Surgical use of language to maximize clarity and impact.' },
-              { term: 'Cadence', def: 'The rhythmic flow of delivery that aids retention.' },
-            ].map((item, i) => (
-              <div key={i} className="border-l border-orange-500/20 pl-3">
-                <h5 className="font-black mb-1 uppercase tracking-widest text-[9px]" style={gradientTextStyle}>{item.term}</h5>
-                <p className="text-[9px] text-white/60 leading-relaxed italic">{item.def}</p>
-              </div>
+              { emoji: '⚡', color: '#F59E0B', label: 'Anchoring Point', key: 'anchoring_point', placeholder: 'Most impactful segment...' },
+              { emoji: '📉', color: '#3B82F6', label: 'Structural Drift', key: 'structural_drift', placeholder: 'Loss of focus area...' },
+              { emoji: '✅', color: '#10B981', label: 'Measurable Step', key: 'measurable_step', placeholder: 'Improvement task...' },
+            ].map((item) => (
+              <GlassCard key={item.key} className="h-full">
+                <div className="px-6 py-5 h-full flex flex-col">
+                  <label className="text-[8px] font-black text-white tracking-[0.3em] uppercase flex items-center gap-1 mb-2">
+                    <span style={{ color: item.color }}>{item.emoji}</span> {item.label}
+                  </label>
+                  <textarea
+                    placeholder={item.placeholder}
+                    value={postAnalysis[item.key]}
+                    onChange={(e) => setPostAnalysis(p => ({...p, [item.key]: e.target.value}))}
+                    className="flex-1 bg-transparent border-0 focus:ring-0 focus:outline-none text-white placeholder:text-white/20 resize-none text-xs font-light font-mono min-h-[80px]"
+                  />
+                </div>
+              </GlassCard>
             ))}
           </div>
-        </GlassCard>
+        </section>
+
+        {/* Calculate Score Button */}
+        <section className="flex flex-col items-center justify-center py-6 mb-6">
+          <GradientButton onClick={handleCalculateScore} disabled={totalScore === 0}>
+            CALCULATE SCORE
+          </GradientButton>
+
+          {/* Evaluator Signature */}
+          <div className="mt-8 w-full max-w-md">
+            <GlassCard>
+              <div className="px-8 py-6 space-y-4">
+                <label className="text-[8px] font-black text-white tracking-[0.3em] uppercase text-center block">
+                  Evaluator Signature
+                </label>
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    onClick={() => { setEvaluatorType('human'); setEvaluatorName(''); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[8px] font-bold uppercase tracking-wider transition-all ${
+                      evaluatorType === 'human'
+                        ? 'bg-white/10 border border-white/20 text-white'
+                        : 'bg-transparent border border-white/5 text-white/40 hover:text-white/60'
+                    }`}
+                  >
+                    ✍️ Human
+                  </button>
+                  <button
+                    onClick={() => { setEvaluatorType('ai'); setEvaluatorName('Gamaliel'); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[8px] font-bold uppercase tracking-wider transition-all ${
+                      evaluatorType === 'ai'
+                        ? 'bg-white/10 border border-[#39ff14]/30 text-[#39ff14]'
+                        : 'bg-transparent border border-white/5 text-white/40 hover:text-white/60'
+                    }`}
+                  >
+                    🤖 AI Gamaliel
+                  </button>
+                </div>
+                {evaluatorType === 'human' ? (
+                  <input
+                    type="text"
+                    placeholder="Enter evaluator name..."
+                    value={evaluatorName}
+                    onChange={(e) => setEvaluatorName(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 text-white placeholder:text-white/30 text-center focus:outline-none focus:ring-1 focus:ring-orange-500/50 [color-scheme:dark]"
+                    style={{
+                      borderRadius: '16px',
+                      padding: '10px 14px',
+                      fontFamily: "'League Script', cursive",
+                      fontSize: '18px',
+                    }}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center gap-2 py-2">
+                    <span className="material-symbols-outlined text-[16px]" style={{ color: '#C026D3' }}>smart_toy</span>
+                    <span
+                      className="text-[16px] font-bold tracking-tight"
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        background: 'linear-gradient(90deg, #D12D6F, #C026D3)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                      }}
+                    >
+                      Gamaliel
+                    </span>
+                  </div>
+                )}
+              </div>
+            </GlassCard>
+          </div>
+        </section>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-white/5 py-8 bg-black/40">
-        <div className="max-w-4xl mx-auto px-4 text-center space-y-3">
-          <div className="flex items-center justify-center gap-2 opacity-70">
-            <span className="text-lg font-serif italic font-bold text-white">SI</span>
-            <div className="h-3 w-px bg-white/40 mx-1" />
-            <span className="text-[8px] font-black tracking-[0.3em] uppercase text-white">Scribe Inc.</span>
-          </div>
-          <p className="text-[8px] tracking-[0.5em] text-white/50 uppercase font-black">
-            © 2026 SCRIBE INC. • WE FIX WHAT MARKETING CANNOT
-          </p>
+      <footer className="border-t border-white/5 py-8 bg-black/40 safe-bottom">
+        <div className="max-w-4xl mx-auto px-4 text-center">
+          <p className="text-[8px] tracking-[0.5em] text-white/50 uppercase font-black">© 2026 THE SCRIBES INC.</p>
         </div>
       </footer>
+    </>
+  );
 
-      {/* Analysis Results Modal */}
-      {showAnalysisModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="relative w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-2xl" style={{
-            background: 'rgba(7, 3, 4, 0.95)',
-            border: '1px solid rgba(255, 69, 0, 0.3)'
-          }}>
-            {/* Modal Header */}
-            <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-white/10" style={{
-              background: 'rgba(7, 3, 4, 0.98)'
-            }}>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">🤖</span>
-                <h3 className="text-sm font-black uppercase tracking-widest" style={gradientTextStyle}>Gamaliel Analysis</h3>
-              </div>
-              <button
-                onClick={() => setShowAnalysisModal(false)}
-                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
-              >
-                <span className="text-white text-sm">✕</span>
-              </button>
-            </div>
+  // renderSummary is now handled by EvaluationSummaryPage component
 
-            {/* Modal Content */}
-            <div className="p-4 overflow-y-auto max-h-[calc(85vh-60px)]">
-              {isAnalyzing ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-4">
-                  <div className="w-12 h-12 border-3 border-[#39ff14] border-t-transparent rounded-full animate-spin" />
-                  <p className="text-white/70 text-sm">Gamaliel is listening to your sermon...</p>
-                  <p className="text-white/40 text-xs">This may take a moment for longer recordings</p>
-                </div>
-              ) : analysisError ? (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
-                  <h4 className="text-red-400 font-bold text-sm mb-2">Analysis Error</h4>
-                  <p className="text-white/70 text-xs">{analysisError}</p>
-                  <button
-                    onClick={() => {
-                      setAnalysisError(null);
-                      runAnalysis();
-                    }}
-                    className="mt-3 px-4 py-2 bg-red-500/20 rounded-lg text-red-300 text-xs font-bold uppercase tracking-wider hover:bg-red-500/30 transition-colors"
-                  >
-                    Try Again
-                  </button>
-                </div>
-              ) : analysisResult ? (
-                <div className="space-y-4">
-                  {/* Success Message */}
-                  <div className="bg-[#39ff14]/10 border border-[#39ff14]/30 rounded-xl p-3 flex items-center gap-2">
-                    <span className="text-lg">✅</span>
-                    <p className="text-[#39ff14] text-xs font-bold uppercase tracking-wider">Analysis Complete - Scores Updated</p>
-                  </div>
+  // ============================================================================
+  // MAIN RENDER
+  // ============================================================================
 
-                  {/* Full Analysis */}
-                  <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-                    <h4 className="text-xs font-black uppercase tracking-widest text-white/70 mb-3">Full Feedback</h4>
-                    <div className="prose prose-invert prose-sm max-w-none">
-                      <pre className="whitespace-pre-wrap text-white/80 text-xs leading-relaxed font-sans">
-                        {analysisResult.fullAnalysis}
-                      </pre>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
+  return (
+    <div className="min-h-screen text-white font-sans selection:bg-orange-500/30" style={{
+      background: `radial-gradient(circle at 10% 10%, rgba(255, 69, 0, 0.12) 0%, transparent 40%), radial-gradient(circle at 90% 90%, rgba(139, 0, 139, 0.12) 0%, transparent 40%), radial-gradient(circle at 50% 50%, rgba(57, 255, 20, 0.02) 0%, transparent 50%), #070304`
+    }}>
+      {currentPage === 'login' ? (
+        <LoginPage
+          onLogin={handleLogin}
+          onNavigateSignUp={() => { setCurrentPage('signup'); window.scrollTo(0, 0); }}
+          onNavigateForgotPassword={() => { /* TODO: Forgot password flow */ }}
+        />
+      ) : currentPage === 'signup' ? (
+        <SignUpPage
+          onSignUp={handleSignUp}
+          onNavigateLogin={() => { setCurrentPage('login'); window.scrollTo(0, 0); }}
+        />
+      ) : currentPage === 'welcome-back' ? (
+        <WelcomeBackPage onContinue={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
+      ) : currentPage === 'tour' ? (
+        <GuidedTourPage onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onSkip={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateToLogin} />
+      ) : currentPage === 'glossary' ? (
+        <GlossaryPage scrollToTerm={glossaryTerm} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateToLogin} />
+      ) : currentPage === 'history' ? (
+        <EvaluationHistoryPage evaluations={savedEvaluations} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateToLogin} />
+      ) : currentPage === 'summary' ? (
+        <EvaluationSummaryPage
+          totalScore={totalScore}
+          sacredFoundation={sacredFoundation}
+          structuralWeight={structuralWeight}
+          vocalCadence={vocalCadence}
+          postAnalysis={postAnalysis}
+          evaluator={{ type: evaluatorType, name: evaluatorType === 'ai' ? 'Gamaliel' : evaluatorName }}
+          onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }}
+          onNewEvaluation={handleNewEvaluation}
+          onLogoClick={navigateToLogin}
+        />
+      ) : (
+        renderDashboard()
       )}
 
-      {/* Custom slider styles */}
+      {/* Custom styles */}
       <style>{`
         input[type="range"] {
           -webkit-appearance: none;
@@ -837,10 +990,47 @@ export default function GamalielDashboard() {
           cursor: pointer;
         }
 
-        /* Ensure consistent spacing on mobile */
-        @media (max-width: 640px) {
-          .grid-cols-2 {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+        @keyframes spin-coin {
+          0% { transform: perspective(1000px) rotateY(0deg); }
+          100% { transform: perspective(1000px) rotateY(2880deg); }
+        }
+        .animate-spin-coin {
+          animation: spin-coin 4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        /* iOS safe area support */
+        .safe-top { padding-top: env(safe-area-inset-top, 0px); }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+        .safe-left { padding-left: env(safe-area-inset-left, 0px); }
+        .safe-right { padding-right: env(safe-area-inset-right, 0px); }
+
+        /* Mobile touch optimizations */
+        * { -webkit-tap-highlight-color: transparent; }
+        button, [role="button"], input[type="range"] {
+          touch-action: manipulation;
+        }
+
+        /* Prevent iOS auto-zoom on input focus (font-size < 16px triggers zoom) */
+        @media screen and (max-width: 768px) {
+          input[type="text"],
+          input[type="date"],
+          input[type="email"],
+          input[type="password"],
+          textarea,
+          select {
+            font-size: 16px !important;
+          }
+        }
+
+        /* Mobile-friendly slider thumb */
+        @media (pointer: coarse) {
+          input[type="range"]::-webkit-slider-thumb {
+            width: 24px;
+            height: 24px;
+          }
+          input[type="range"]::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
           }
         }
       `}</style>

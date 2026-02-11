@@ -62,17 +62,31 @@ Please provide your analysis in this structure:
 
 Be warm but honest. Your goal is to help preachers become more effective communicators of truth.`;
 
+// ── Helpers ───────────────────────────────────────────────────────────
+
+function generateId() {
+  // crypto.randomUUID() requires secure context (HTTPS)
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback for older browsers or non-HTTPS dev
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 // ── Storage: upload file to Supabase, get public URL ─────────────────
 
 async function uploadToStorage(file) {
   if (!supabase) {
     throw new Error(
-      'Supabase not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment.'
+      'Supabase not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env and to Vercel environment variables.'
     );
   }
 
   const ext = file.name?.split('.').pop() || 'mp3';
-  const path = `uploads/${crypto.randomUUID()}.${ext}`;
+  const path = `uploads/${generateId()}.${ext}`;
 
   const { data, error } = await supabase.storage
     .from('sermon-uploads')
@@ -82,21 +96,36 @@ async function uploadToStorage(file) {
     });
 
   if (error) {
+    const msg = error.message || JSON.stringify(error);
     if (
-      error.message?.includes('Bucket not found') ||
-      error.message?.includes('not found') ||
-      error.statusCode === 400
+      msg.includes('Bucket not found') ||
+      msg.includes('not found') ||
+      msg.includes('does not exist') ||
+      msg.includes('Unauthorized') ||
+      msg.includes('security') ||
+      error.statusCode === 404 ||
+      error.statusCode === 403
     ) {
       throw new Error(
-        'Supabase Storage bucket "sermon-uploads" not found. Create it in your Supabase dashboard: Storage > New Bucket > name it "sermon-uploads" and enable Public access. Then run the storage policies SQL from supabase/schema.sql.'
+        'Supabase Storage bucket "sermon-uploads" is missing or has no upload policy. '
+        + 'Fix: Go to Supabase dashboard → Storage → create a PUBLIC bucket named "sermon-uploads", '
+        + 'then run the storage policy SQL from supabase/schema.sql in the SQL Editor.'
       );
     }
-    throw new Error(`File upload failed: ${error.message}`);
+    throw new Error(`File upload to storage failed: ${msg}`);
+  }
+
+  if (!data?.path) {
+    throw new Error('File upload returned no path — the bucket may not be configured correctly.');
   }
 
   const { data: urlData } = supabase.storage
     .from('sermon-uploads')
     .getPublicUrl(data.path);
+
+  if (!urlData?.publicUrl) {
+    throw new Error('Could not generate a public URL for the uploaded file. Make sure the "sermon-uploads" bucket is set to Public.');
+  }
 
   return { path: data.path, publicUrl: urlData.publicUrl };
 }

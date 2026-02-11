@@ -4,7 +4,9 @@
 
 export const config = {
   runtime: 'edge',
-  maxDuration: 300, // 5 minutes — long recordings need time to transcribe
+  // maxDuration defaults to 30s on Hobby, 300s on Pro.
+  // Deepgram is fast (faster than real-time), so 30s is enough for most files.
+  // Upgrade to Vercel Pro for sermons over ~30 minutes.
 };
 
 const CORS_HEADERS = {

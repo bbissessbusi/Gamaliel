@@ -4,7 +4,6 @@
 
 export const config = {
   runtime: 'edge',
-  maxDuration: 300, // 5 minutes for thorough analysis of long sermons
 };
 
 const CORS_HEADERS = {
@@ -53,6 +52,9 @@ export default async function handler(req) {
   }
 
   try {
+    // Read the full request body as text — safer than streaming for text payloads
+    const bodyText = await req.text();
+
     const anthropicResponse = await fetch(
       'https://api.anthropic.com/v1/messages',
       {
@@ -62,12 +64,14 @@ export default async function handler(req) {
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
         },
-        body: req.body,
+        body: bodyText,
       }
     );
 
-    // Stream Anthropic's response back to the client
-    return new Response(anthropicResponse.body, {
+    // Read Anthropic's full response, then return it
+    const responseText = await anthropicResponse.text();
+
+    return new Response(responseText, {
       status: anthropicResponse.status,
       headers: {
         ...CORS_HEADERS,

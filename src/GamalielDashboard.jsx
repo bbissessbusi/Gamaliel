@@ -379,47 +379,57 @@ export default function GamalielApp() {
   const totalScore = Object.values(structuralWeight).reduce((a, b) => a + b, 0) +
     Object.values(vocalCadence).reduce((a, b) => a + b, 0);
 
-  // Gamaliel AI Analysis - uses real Claude API when a file is uploaded
+  // Gamaliel AI Analysis — Upload → Transcribe (Deepgram) → Analyze (Claude)
   const runAnalysis = async (file) => {
     setIsAnalyzing(true);
     setAnalysisMilestone('');
 
+    // Milestone ticker for the Claude analysis phase
+    let milestoneInterval = null;
+
+    const statusHandler = (phase, message) => {
+      setAnalysisStatus(message);
+
+      const milestoneMap = {
+        'upload': 'Securely uploading your file to temporary storage...',
+        'transcribe': 'Converting speech to text with Deepgram AI...',
+        'transcribe-done': 'Transcript ready — preparing for Gamaliel...',
+        'analyze': 'Gamaliel is reading your sermon transcript...',
+        'done': 'Your scorecard has been filled in by Gamaliel.',
+      };
+      setAnalysisMilestone(milestoneMap[phase] || '');
+
+      // Start milestone ticker during Claude analysis
+      if (phase === 'analyze') {
+        const milestones = [
+          'Evaluating theological fidelity and exegetical soundness...',
+          'Scoring structural weight: relevancy, clarity, connectivity...',
+          'Assessing vocal cadence: pacing, enthusiasm, charisma...',
+          'Identifying anchoring points and structural drift...',
+          'Crafting your personalized improvement step...',
+          'Almost done — finalizing your Homiletics Index...',
+        ];
+        let i = 0;
+        milestoneInterval = setInterval(() => {
+          if (i < milestones.length) {
+            setAnalysisMilestone(milestones[i]);
+            i++;
+          }
+        }, 5000);
+      } else if (milestoneInterval && phase !== 'analyze') {
+        clearInterval(milestoneInterval);
+        milestoneInterval = null;
+      }
+    };
+
     try {
-      setAnalysisStatus('Preparing sermon recording...');
-      setAnalysisMilestone('Gamaliel is reading your sermon file...');
-      await new Promise(r => setTimeout(r, 1000));
-
-      setAnalysisStatus('Uploading to Gamaliel AI...');
-      setAnalysisMilestone('Encoding audio/video for cloud analysis...');
-      await new Promise(r => setTimeout(r, 800));
-
-      setAnalysisStatus('Analyzing with Gamaliel AI...');
-      setAnalysisMilestone('Gamaliel is listening to your sermon and evaluating delivery...');
-
-      // Start a milestone ticker while waiting for Claude
-      const milestones = [
-        'Evaluating theological fidelity and exegetical soundness...',
-        'Scoring structural weight: relevancy, clarity, connectivity...',
-        'Assessing vocal cadence: pacing, enthusiasm, charisma...',
-        'Identifying anchoring points and structural drift...',
-        'Crafting your personalized improvement step...',
-        'Almost done — finalizing your Homiletics Index...',
-      ];
-      let milestoneIndex = 0;
-      const milestoneInterval = setInterval(() => {
-        if (milestoneIndex < milestones.length) {
-          setAnalysisMilestone(milestones[milestoneIndex]);
-          milestoneIndex++;
-        }
-      }, 5000);
-
       const result = await analyzeSermon(file, {
         title: sermonTitle,
         goal: primaryGoal,
         date: preachDate,
-      });
+      }, statusHandler);
 
-      clearInterval(milestoneInterval);
+      if (milestoneInterval) clearInterval(milestoneInterval);
 
       setAnalysisStatus('Processing results...');
       setAnalysisMilestone('Mapping scores to your scorecard...');
@@ -467,9 +477,10 @@ export default function GamalielApp() {
       setAnalysisStatus('Analysis complete!');
       setAnalysisMilestone('Your scorecard has been filled in by Gamaliel.');
     } catch (error) {
+      if (milestoneInterval) clearInterval(milestoneInterval);
       setAnalysisStatus(`Error: ${error.message}`);
       setAnalysisMilestone('');
-      await new Promise(r => setTimeout(r, 4000));
+      await new Promise(r => setTimeout(r, 6000));
     }
 
     await new Promise(r => setTimeout(r, 800));

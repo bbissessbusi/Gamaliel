@@ -25,3 +25,35 @@ create policy "Allow all for authenticated users"
   for all
   using (true)
   with check (true);
+
+-- ============================================================================
+-- STORAGE BUCKET for sermon uploads (used by Deepgram transcription)
+-- ============================================================================
+-- This bucket holds audio/video files temporarily while Deepgram transcribes
+-- them. Files are auto-deleted after transcription completes.
+--
+-- OPTION A: Create the bucket via SQL (run this in the SQL Editor):
+
+insert into storage.buckets (id, name, public)
+values ('sermon-uploads', 'sermon-uploads', true)
+on conflict (id) do nothing;
+
+-- OPTION B: Create via the Supabase Dashboard:
+--   1. Go to Storage in the left sidebar
+--   2. Click "New Bucket"
+--   3. Name: sermon-uploads
+--   4. Toggle "Public bucket" ON
+--   5. Click "Create bucket"
+
+-- Storage policies — allow uploads, reads, and deletes from the client
+create policy "Allow public uploads to sermon-uploads"
+  on storage.objects for insert
+  with check (bucket_id = 'sermon-uploads');
+
+create policy "Allow public reads from sermon-uploads"
+  on storage.objects for select
+  using (bucket_id = 'sermon-uploads');
+
+create policy "Allow public deletes from sermon-uploads"
+  on storage.objects for delete
+  using (bucket_id = 'sermon-uploads');

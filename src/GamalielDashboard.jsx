@@ -691,10 +691,20 @@ export default function GamalielApp() {
 
                 {/* Upload status indicator */}
                 {recordedFile && !isAnalyzing && (
-                  <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2">
+                  <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 flex items-center justify-between">
                     <span className="text-[9px] font-mono text-white/60">
                       📁 {recordedFile.name}
                     </span>
+                    <button
+                      onClick={() => {
+                        setRecordedFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                      className="ml-3 w-5 h-5 flex items-center justify-center rounded-full bg-white/10 hover:bg-red-500/30 text-white/50 hover:text-red-400 transition-all text-xs leading-none"
+                      title="Remove file"
+                    >
+                      ✕
+                    </button>
                   </div>
                 )}
 

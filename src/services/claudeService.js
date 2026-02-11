@@ -101,7 +101,7 @@ async function callClaudeAPI(requestBody) {
 
   // Handle 413 specifically — payload too large
   if (response.status === 413) {
-    throw new Error('Your sermon file is too large. Please try a shorter recording or compress the audio file before uploading (under 20MB recommended).');
+    throw new Error('Your sermon file is too large. Please try a shorter recording (up to 60 minutes) or compress the audio/video file before uploading (under 150MB recommended).');
   }
 
   // Parse response
@@ -129,12 +129,12 @@ async function callClaudeAPI(requestBody) {
 export async function analyzeSermon(mediaFile, context = {}) {
   const fileSizeMB = mediaFile.size / (1024 * 1024);
 
-  // Hard limit: files over 25MB will almost certainly fail
-  if (fileSizeMB > 25) {
-    throw new Error(`File is ${fileSizeMB.toFixed(0)}MB — too large for analysis. Please use a recording under 20MB (roughly 20 minutes of audio). Try compressing the file or using a lower quality recording.`);
+  // Hard limit: files over 200MB will almost certainly fail
+  if (fileSizeMB > 200) {
+    throw new Error(`File is ${fileSizeMB.toFixed(0)}MB — too large for analysis. Please use a recording under 150MB (up to 60 minutes of audio/video). Try compressing the file or using a lower quality recording.`);
   }
 
-  if (fileSizeMB > 15) {
+  if (fileSizeMB > 100) {
     console.warn(`File is ${fileSizeMB.toFixed(1)}MB. Large files may take longer to upload and process.`);
   }
 
@@ -149,7 +149,7 @@ export async function analyzeSermon(mediaFile, context = {}) {
 
   const requestBody = {
     model: 'claude-sonnet-4-5-20250929',
-    max_tokens: 4096,
+    max_tokens: 8192,
     system: GAMALIEL_SYSTEM_PROMPT,
     messages: [
       {

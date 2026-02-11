@@ -97,19 +97,21 @@ async function uploadToStorage(file) {
 
   if (error) {
     const msg = error.message || JSON.stringify(error);
-    if (
-      msg.includes('Bucket not found') ||
-      msg.includes('not found') ||
-      msg.includes('does not exist') ||
-      msg.includes('Unauthorized') ||
-      msg.includes('security') ||
-      error.statusCode === 404 ||
-      error.statusCode === 403
-    ) {
+    const code = error.statusCode || error.status;
+    if (msg.includes('Bucket not found') || msg.includes('does not exist') || code === 404) {
       throw new Error(
-        'Supabase Storage bucket "sermon-uploads" is missing or has no upload policy. '
-        + 'Fix: Go to Supabase dashboard → Storage → create a PUBLIC bucket named "sermon-uploads", '
-        + 'then run the storage policy SQL from supabase/schema.sql in the SQL Editor.'
+        'Storage bucket "sermon-uploads" does not exist. '
+        + 'Go to your Supabase dashboard → Storage → New Bucket → name it "sermon-uploads" → toggle Public ON → Create. '
+        + 'Then go to SQL Editor and run the storage policy SQL from supabase/schema.sql.'
+      );
+    }
+    if (msg.includes('Unauthorized') || msg.includes('security') || msg.includes('policy') ||
+        msg.includes('row-level security') || msg.includes('violates') || code === 403) {
+      throw new Error(
+        'The "sermon-uploads" bucket exists but upload permission was denied. '
+        + 'The storage policies need to be applied. Go to your Supabase dashboard → SQL Editor → '
+        + 'paste and run ONLY the storage policy section from supabase/schema.sql (the 6 lines starting with "drop policy" and "create policy"). '
+        + 'Raw error: ' + msg
       );
     }
     throw new Error(`File upload to storage failed: ${msg}`);

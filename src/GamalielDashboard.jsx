@@ -285,7 +285,7 @@ const AIPulse = () => {
 
 const WelcomeBackPage = ({ onContinue }) => {
   useEffect(() => {
-    const timer = setTimeout(() => onContinue(), 2500);
+    const timer = setTimeout(() => onContinue(), 10000);
     return () => clearTimeout(timer);
   }, [onContinue]);
 
@@ -314,6 +314,9 @@ const WelcomeBackPage = ({ onContinue }) => {
         Your scorecard is ready. Let's continue refining your craft.
       </p>
       <div className="mt-8 w-8 h-8 border-2 border-[#FF4500] border-t-transparent rounded-full animate-spin opacity-40" />
+      <p className="mt-6 text-[9px] text-white/25 uppercase tracking-[0.3em]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+        Loading your data...
+      </p>
     </div>
   );
 };
@@ -614,6 +617,27 @@ export default function GamalielApp() {
     // New user — always go to guided tour
     localStorage.setItem('gamaliel_visited', 'true');
     setCurrentPage('tour');
+    window.scrollTo(0, 0);
+  };
+
+  // OAuth handler — works for both login and signup (Google / Apple)
+  const handleOAuthLogin = async (provider) => {
+    // TODO: Wire to Supabase OAuth when providers are configured:
+    // const { error } = await supabase.auth.signInWithOAuth({
+    //   provider, // 'google' or 'apple'
+    //   options: { redirectTo: window.location.origin },
+    // });
+    // if (error) throw error;
+    // Supabase handles the redirect and callback automatically.
+
+    // Placeholder: treat OAuth the same as email login for now
+    const hasVisited = localStorage.getItem('gamaliel_visited');
+    if (hasVisited) {
+      setCurrentPage('welcome-back');
+    } else {
+      localStorage.setItem('gamaliel_visited', 'true');
+      setCurrentPage('tour');
+    }
     window.scrollTo(0, 0);
   };
 
@@ -952,12 +976,14 @@ export default function GamalielApp() {
       {currentPage === 'login' ? (
         <LoginPage
           onLogin={handleLogin}
+          onOAuthLogin={handleOAuthLogin}
           onNavigateSignUp={() => { setCurrentPage('signup'); window.scrollTo(0, 0); }}
           onNavigateForgotPassword={() => { /* TODO: Forgot password flow */ }}
         />
       ) : currentPage === 'signup' ? (
         <SignUpPage
           onSignUp={handleSignUp}
+          onOAuthLogin={handleOAuthLogin}
           onNavigateLogin={() => { setCurrentPage('login'); window.scrollTo(0, 0); }}
         />
       ) : currentPage === 'welcome-back' ? (

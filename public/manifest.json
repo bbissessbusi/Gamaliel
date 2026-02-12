@@ -1,0 +1,18 @@
+{
+  "name": "Gamaliel — Homiletics Scorecard",
+  "short_name": "Gamaliel",
+  "description": "Premium digital analysis of sermon weight, structure, and delivery.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070304",
+  "theme_color": "#070304",
+  "icons": [
+    {
+      "src": "/Applogo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

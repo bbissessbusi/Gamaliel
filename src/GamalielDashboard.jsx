@@ -214,7 +214,7 @@ const CheckboxItem = ({ label, subtitle, checked, onToggle, onLabelClick }) => (
           </span>
         ) : label}
       </span>
-      <span className="text-[8px] text-white/70 uppercase font-bold tracking-widest">{subtitle}</span>
+      <span className="text-[10px] sm:text-[8px] text-white/70 uppercase font-bold tracking-widest">{subtitle}</span>
     </div>
   </label>
 );
@@ -708,33 +708,33 @@ export default function GamalielApp() {
       <header className="sticky top-0 z-50 border-b border-white/5 bg-[#070304]/80 backdrop-blur-2xl safe-top">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <Logo height={28} onClick={navigateHome} />
-          <div className="flex items-center gap-3">
+          <nav className="flex items-center gap-2 sm:gap-3 overflow-x-auto no-scrollbar">
             <button
               onClick={() => { setCurrentPage('tour'); }}
-              className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-[#FF4500] transition-colors uppercase"
+              className="text-[10px] sm:text-[11px] font-black tracking-[0.2em] text-white/50 hover:text-[#FF4500] transition-colors uppercase whitespace-nowrap py-2"
             >
               TOUR
             </button>
             <button
               onClick={() => { loadEvaluations(); setCurrentPage('history'); }}
-              className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-[#FF4500] transition-colors uppercase"
+              className="text-[10px] sm:text-[11px] font-black tracking-[0.2em] text-white/50 hover:text-[#FF4500] transition-colors uppercase whitespace-nowrap py-2"
             >
               HISTORY
             </button>
             <button
               onClick={() => navigateToGlossary()}
-              className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-[#FF4500] transition-colors uppercase"
+              className="text-[10px] sm:text-[11px] font-black tracking-[0.2em] text-white/50 hover:text-[#FF4500] transition-colors uppercase whitespace-nowrap py-2"
             >
               LEXICON
             </button>
             <GradientButton small onClick={handleSave}>SAVE</GradientButton>
             <button
               onClick={handleLogout}
-              className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-red-400 transition-colors uppercase ml-1"
+              className="text-[10px] sm:text-[11px] font-black tracking-[0.2em] text-white/50 hover:text-red-400 transition-colors uppercase whitespace-nowrap py-2"
             >
               LOGOUT
             </button>
-          </div>
+          </nav>
         </div>
       </header>
 
@@ -1151,6 +1151,10 @@ export default function GamalielApp() {
             height: 24px;
           }
         }
+
+        /* Hide scrollbar on nav overflow (iOS) */
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
     </div>
   );

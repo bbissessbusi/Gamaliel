@@ -74,6 +74,24 @@ function generateId() {
   });
 }
 
+// Map file extensions → MIME types for audio/video formats the browser may not recognize
+const MIME_MAP = {
+  mp3: 'audio/mpeg', mp4: 'video/mp4', m4a: 'audio/mp4', m4v: 'video/mp4',
+  aac: 'audio/aac', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/opus',
+  flac: 'audio/flac', wav: 'audio/wav', wma: 'audio/x-ms-wma',
+  amr: 'audio/amr', webm: 'audio/webm', caf: 'audio/x-caf',
+  aiff: 'audio/aiff', aif: 'audio/aiff', '3gp': 'audio/3gpp',
+  '3gpp': 'audio/3gpp', mpga: 'audio/mpeg', mpeg: 'video/mpeg',
+  mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska',
+  wmv: 'video/x-ms-wmv',
+};
+
+function getMimeType(file) {
+  if (file.type) return file.type;
+  const ext = (file.name || '').split('.').pop()?.toLowerCase();
+  return MIME_MAP[ext] || 'application/octet-stream';
+}
+
 function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -113,7 +131,7 @@ async function uploadToStorage(file, onProgress) {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', uploadUrl, true);
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    xhr.setRequestHeader('Content-Type', file.type || 'audio/mpeg');
+    xhr.setRequestHeader('Content-Type', getMimeType(file));
 
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable && typeof onProgress === 'function') {

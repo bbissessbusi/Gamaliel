@@ -782,7 +782,7 @@ export default function GamalielApp() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="audio/*,video/*"
+                  accept="audio/*,video/*,.mp3,.mp4,.m4a,.m4v,.aac,.ogg,.oga,.opus,.flac,.wav,.wma,.amr,.webm,.mov,.avi,.mkv,.caf,.aiff,.aif,.3gp,.3gpp,.mpga,.mpeg,.wmv"
                   onChange={handleFileSelected}
                   className="hidden"
                 />

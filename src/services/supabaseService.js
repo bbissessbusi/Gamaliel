@@ -12,6 +12,74 @@ export const supabase = supabaseUrl && supabaseAnonKey
   : null;
 
 // ============================================================================
+// AUTHENTICATION
+// ============================================================================
+
+/** Sign up with email + password. Returns the user on success. */
+export async function signUpWithEmail(email, password, fullName) {
+  if (!supabase) throw new Error('Supabase not configured.');
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { full_name: fullName },
+    },
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+/** Sign in with email + password. Returns the session on success. */
+export async function signInWithEmail(email, password) {
+  if (!supabase) throw new Error('Supabase not configured.');
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+/** Sign in (or sign up) with Google or Apple. Redirects the browser. */
+export async function signInWithOAuth(provider) {
+  if (!supabase) throw new Error('Supabase not configured.');
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider, // 'google' or 'apple'
+    options: {
+      redirectTo: window.location.origin,
+    },
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+/** Sign out the current user. */
+export async function signOut() {
+  if (!supabase) return;
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+}
+
+/** Get the current session (returns null if not logged in). */
+export async function getSession() {
+  if (!supabase) return null;
+  const { data: { session } } = await supabase.auth.getSession();
+  return session;
+}
+
+/** Listen for auth state changes (login, logout, token refresh). */
+export function onAuthStateChange(callback) {
+  if (!supabase) return { data: { subscription: { unsubscribe: () => {} } } };
+  return supabase.auth.onAuthStateChange(callback);
+}
+
+// ============================================================================
 // EVALUATIONS TABLE OPERATIONS
 // ============================================================================
 

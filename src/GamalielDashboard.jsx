@@ -7,7 +7,16 @@ import LoginPage from './LoginPage';
 import SignUpPage from './SignUpPage';
 import Logo from './components/Logo';
 import { analyzeSermon } from './services/claudeService';
-import { saveEvaluation, getEvaluations } from './services/supabaseService';
+import {
+  saveEvaluation,
+  getEvaluations,
+  signInWithEmail,
+  signUpWithEmail,
+  signInWithOAuth,
+  signOut,
+  getSession,
+  onAuthStateChange,
+} from './services/supabaseService';
 
 // ============================================================================
 // GLOSSARY TERM MAPPING (dashboard key → glossary card ID)
@@ -326,7 +335,8 @@ const WelcomeBackPage = ({ onContinue }) => {
 // ============================================================================
 
 export default function GamalielApp() {
-  const [currentPage, setCurrentPage] = useState('login'); // 'login' | 'signup' | 'dashboard' | 'summary' | 'glossary' | 'history' | 'tour' | 'welcome-back'
+  const [currentPage, setCurrentPage] = useState('loading'); // 'loading' | 'login' | 'signup' | 'dashboard' | 'summary' | 'glossary' | 'history' | 'tour' | 'welcome-back'
+  const [currentUser, setCurrentUser] = useState(null);
   const [glossaryTerm, setGlossaryTerm] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState('');
@@ -334,6 +344,55 @@ export default function GamalielApp() {
   const [recordedFile, setRecordedFile] = useState(null);
   const [savedEvaluations, setSavedEvaluations] = useState([]);
   const fileInputRef = useRef(null);
+
+  // ── Auth: check session on mount + listen for auth state changes ──
+  useEffect(() => {
+    let mounted = true;
+
+    // Check for existing session (keeps users logged in across refreshes)
+    getSession().then((session) => {
+      if (!mounted) return;
+      if (session?.user) {
+        setCurrentUser(session.user);
+        // Returning user with persisted session → welcome back → dashboard
+        setCurrentPage('welcome-back');
+      } else {
+        setCurrentPage('login');
+      }
+    }).catch(() => {
+      if (mounted) setCurrentPage('login');
+    });
+
+    // Listen for auth events (handles OAuth redirect callbacks, sign-out, etc.)
+    const { data: { subscription } } = onAuthStateChange((event, session) => {
+      if (!mounted) return;
+
+      if (event === 'SIGNED_IN' && session?.user) {
+        setCurrentUser(session.user);
+
+        // Determine if this is a brand-new user (created within the last 30 seconds)
+        const createdAt = new Date(session.user.created_at).getTime();
+        const now = Date.now();
+        const isNewUser = (now - createdAt) < 30000;
+
+        if (isNewUser) {
+          setCurrentPage('tour');
+        } else {
+          setCurrentPage('welcome-back');
+        }
+        window.scrollTo(0, 0);
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        setCurrentPage('login');
+        window.scrollTo(0, 0);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe();
+    };
+  }, []);
 
   // Form state
   const [sermonTitle, setSermonTitle] = useState('');
@@ -590,54 +649,52 @@ export default function GamalielApp() {
     setCurrentPage('glossary');
   };
 
-  // Navigate to login page (used by Logo onClick on all pages)
-  const navigateToLogin = () => {
-    setCurrentPage('login');
+  // Navigate home — if logged in go to dashboard, otherwise login
+  const navigateHome = () => {
+    setCurrentPage(currentUser ? 'dashboard' : 'login');
     window.scrollTo(0, 0);
   };
 
-  // Auth handlers (placeholder — wire to Supabase auth as needed)
+  // ── Auth handlers (real Supabase auth) ──
+
   const handleLogin = async (email, password) => {
-    // TODO: Replace with Supabase auth: const { error } = await supabase.auth.signInWithPassword({ email, password });
-    const hasVisited = localStorage.getItem('gamaliel_visited');
-    if (hasVisited) {
-      // Returning user — show "Welcome Back" then go to dashboard
+    const { session } = await signInWithEmail(email, password);
+    // onAuthStateChange will fire SIGNED_IN and handle navigation
+    // But as a fallback, if the listener hasn't fired yet:
+    if (session?.user) {
+      setCurrentUser(session.user);
       setCurrentPage('welcome-back');
-      window.scrollTo(0, 0);
-    } else {
-      // New user — go to guided tour
-      localStorage.setItem('gamaliel_visited', 'true');
-      setCurrentPage('tour');
       window.scrollTo(0, 0);
     }
   };
 
   const handleSignUp = async (fullName, email, password) => {
-    // TODO: Replace with Supabase auth: const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
+    const { user } = await signUpWithEmail(email, password, fullName);
     // New user — always go to guided tour
-    localStorage.setItem('gamaliel_visited', 'true');
-    setCurrentPage('tour');
-    window.scrollTo(0, 0);
+    if (user) {
+      setCurrentUser(user);
+      setCurrentPage('tour');
+      window.scrollTo(0, 0);
+    }
   };
 
   // OAuth handler — works for both login and signup (Google / Apple)
+  // This redirects the browser to the provider. When the user returns,
+  // onAuthStateChange fires SIGNED_IN and handles navigation automatically.
   const handleOAuthLogin = async (provider) => {
-    // TODO: Wire to Supabase OAuth when providers are configured:
-    // const { error } = await supabase.auth.signInWithOAuth({
-    //   provider, // 'google' or 'apple'
-    //   options: { redirectTo: window.location.origin },
-    // });
-    // if (error) throw error;
-    // Supabase handles the redirect and callback automatically.
+    await signInWithOAuth(provider);
+    // Browser will redirect to Google/Apple — no code runs after this point.
+  };
 
-    // Placeholder: treat OAuth the same as email login for now
-    const hasVisited = localStorage.getItem('gamaliel_visited');
-    if (hasVisited) {
-      setCurrentPage('welcome-back');
-    } else {
-      localStorage.setItem('gamaliel_visited', 'true');
-      setCurrentPage('tour');
+  // Logout — clears session and returns to login
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (err) {
+      console.warn('Sign out error:', err.message);
     }
+    setCurrentUser(null);
+    setCurrentPage('login');
     window.scrollTo(0, 0);
   };
 
@@ -650,7 +707,7 @@ export default function GamalielApp() {
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-white/5 bg-[#070304]/80 backdrop-blur-2xl safe-top">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Logo height={28} onClick={navigateToLogin} />
+          <Logo height={28} onClick={navigateHome} />
           <div className="flex items-center gap-3">
             <button
               onClick={() => { setCurrentPage('tour'); }}
@@ -671,6 +728,12 @@ export default function GamalielApp() {
               LEXICON
             </button>
             <GradientButton small onClick={handleSave}>SAVE</GradientButton>
+            <button
+              onClick={handleLogout}
+              className="text-[8px] font-black tracking-[0.3em] text-white/50 hover:text-red-400 transition-colors uppercase ml-1"
+            >
+              LOGOUT
+            </button>
           </div>
         </div>
       </header>
@@ -973,7 +1036,15 @@ export default function GamalielApp() {
     <div className="min-h-screen text-white font-sans selection:bg-orange-500/30" style={{
       background: `radial-gradient(circle at 10% 10%, rgba(255, 69, 0, 0.12) 0%, transparent 40%), radial-gradient(circle at 90% 90%, rgba(139, 0, 139, 0.12) 0%, transparent 40%), radial-gradient(circle at 50% 50%, rgba(57, 255, 20, 0.02) 0%, transparent 50%), #070304`
     }}>
-      {currentPage === 'login' ? (
+      {currentPage === 'loading' ? (
+        <div className="min-h-screen flex items-center justify-center" style={{
+          background: `radial-gradient(circle at 30% 20%, rgba(255, 69, 0, 0.15) 0%, transparent 40%),
+                       radial-gradient(circle at 70% 80%, rgba(139, 0, 139, 0.2) 0%, transparent 40%),
+                       #050203`,
+        }}>
+          <Logo height={48} showLabel={false} />
+        </div>
+      ) : currentPage === 'login' ? (
         <LoginPage
           onLogin={handleLogin}
           onOAuthLogin={handleOAuthLogin}
@@ -989,11 +1060,11 @@ export default function GamalielApp() {
       ) : currentPage === 'welcome-back' ? (
         <WelcomeBackPage onContinue={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
       ) : currentPage === 'tour' ? (
-        <GuidedTourPage onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onSkip={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateToLogin} />
+        <GuidedTourPage onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onSkip={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateHome} />
       ) : currentPage === 'glossary' ? (
-        <GlossaryPage scrollToTerm={glossaryTerm} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateToLogin} />
+        <GlossaryPage scrollToTerm={glossaryTerm} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateHome} />
       ) : currentPage === 'history' ? (
-        <EvaluationHistoryPage evaluations={savedEvaluations} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateToLogin} />
+        <EvaluationHistoryPage evaluations={savedEvaluations} onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateHome} />
       ) : currentPage === 'summary' ? (
         <EvaluationSummaryPage
           totalScore={totalScore}
@@ -1004,7 +1075,7 @@ export default function GamalielApp() {
           evaluator={{ type: evaluatorType, name: evaluatorType === 'ai' ? 'Gamaliel' : evaluatorName }}
           onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }}
           onNewEvaluation={handleNewEvaluation}
-          onLogoClick={navigateToLogin}
+          onLogoClick={navigateHome}
         />
       ) : (
         renderDashboard()

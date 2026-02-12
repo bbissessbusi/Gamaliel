@@ -11,6 +11,9 @@ export const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
+// Exposed for direct REST uploads (XHR with progress tracking)
+export { supabaseUrl, supabaseAnonKey };
+
 // ============================================================================
 // AUTHENTICATION
 // ============================================================================

@@ -6,7 +6,7 @@
 // So we first transcribe the recording to text via Deepgram, then send
 // the transcript to Claude for homiletics analysis.
 
-import { supabase } from './supabaseService';
+import { supabase, supabaseUrl, supabaseAnonKey } from './supabaseService';
 
 // ── Gamaliel system prompt ───────────────────────────────────────────
 
@@ -65,21 +65,32 @@ Be warm but honest. Your goal is to help preachers become more effective communi
 // ── Helpers ───────────────────────────────────────────────────────────
 
 function generateId() {
-  // crypto.randomUUID() requires secure context (HTTPS)
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  // Fallback for older browsers or non-HTTPS dev
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
   });
 }
 
-// ── Storage: upload file to Supabase, get public URL ─────────────────
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
 
-async function uploadToStorage(file) {
-  if (!supabase) {
+// ── Storage: upload file to Supabase with progress tracking ──────────
+
+/**
+ * Upload a file to Supabase Storage using XMLHttpRequest for progress.
+ * @param {File}     file       - The file to upload
+ * @param {function} onProgress - Callback: (percent, loaded, total) => void
+ * @returns {Promise<{path, publicUrl}>}
+ */
+async function uploadToStorage(file, onProgress) {
+  if (!supabase || !supabaseUrl || !supabaseAnonKey) {
     throw new Error(
       'Supabase not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env and to Vercel environment variables.'
     );
@@ -88,48 +99,89 @@ async function uploadToStorage(file) {
   const ext = file.name?.split('.').pop() || 'mp3';
   const path = `uploads/${generateId()}.${ext}`;
 
-  const { data, error } = await supabase.storage
-    .from('sermon-uploads')
-    .upload(path, file, {
-      contentType: file.type || 'audio/mpeg',
-      upsert: false,
+  // Get auth token if logged in, otherwise fall back to anon key
+  let token = supabaseAnonKey;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) token = session.access_token;
+  } catch { /* use anon key */ }
+
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/sermon-uploads/${path}`;
+
+  // Use XMLHttpRequest for upload progress tracking (fetch API has no upload progress)
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', uploadUrl, true);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('Content-Type', file.type || 'audio/mpeg');
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && typeof onProgress === 'function') {
+        onProgress(Math.round((e.loaded / e.total) * 100), e.loaded, e.total);
+      }
     });
 
-  if (error) {
-    const msg = error.message || JSON.stringify(error);
-    const code = error.statusCode || error.status;
-    if (msg.includes('Bucket not found') || msg.includes('does not exist') || code === 404) {
-      throw new Error(
-        'Storage bucket "sermon-uploads" does not exist. '
-        + 'Go to your Supabase dashboard → Storage → New Bucket → name it "sermon-uploads" → toggle Public ON → Create. '
-        + 'Then go to SQL Editor and run the storage policy SQL from supabase/schema.sql.'
-      );
-    }
-    if (msg.includes('Unauthorized') || msg.includes('security') || msg.includes('policy') ||
-        msg.includes('row-level security') || msg.includes('violates') || code === 403) {
-      throw new Error(
-        'The "sermon-uploads" bucket exists but upload permission was denied. '
-        + 'The storage policies need to be applied. Go to your Supabase dashboard → SQL Editor → '
-        + 'paste and run ONLY the storage policy section from supabase/schema.sql (the 6 lines starting with "drop policy" and "create policy"). '
-        + 'Raw error: ' + msg
-      );
-    }
-    throw new Error(`File upload to storage failed: ${msg}`);
-  }
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        const raw = xhr.responseText || '';
 
-  if (!data?.path) {
-    throw new Error('File upload returned no path — the bucket may not be configured correctly.');
-  }
+        // ── Payload too large (Supabase server-side file size limit) ──
+        if (xhr.status === 413 || raw.includes('Payload too large') || raw.includes('too large')) {
+          reject(new Error(
+            `Your file (${formatFileSize(file.size)}) exceeds the Supabase Storage upload size limit. `
+            + 'To fix this: go to your Supabase dashboard → Storage (left sidebar) → scroll down to "Upload file size limit" → '
+            + `increase it to at least ${formatFileSize(file.size)}. Then try again.`
+          ));
+          return;
+        }
 
+        // ── Bucket not found ──
+        if (xhr.status === 404 || raw.includes('Bucket not found') || raw.includes('does not exist')) {
+          reject(new Error(
+            'Storage bucket "sermon-uploads" does not exist. '
+            + 'Go to your Supabase dashboard → Storage → New Bucket → name it "sermon-uploads" → toggle Public ON → Create. '
+            + 'Then go to SQL Editor and run the storage policy SQL from supabase/schema.sql.'
+          ));
+          return;
+        }
+
+        // ── Permission denied ──
+        if (xhr.status === 403 || raw.includes('policy') || raw.includes('security') || raw.includes('Unauthorized')) {
+          reject(new Error(
+            'The "sermon-uploads" bucket exists but upload permission was denied. '
+            + 'Go to your Supabase dashboard → SQL Editor → '
+            + 'paste and run the storage policy SQL from supabase/schema.sql.'
+          ));
+          return;
+        }
+
+        reject(new Error(`Upload failed (HTTP ${xhr.status}): ${raw.slice(0, 300)}`));
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      reject(new Error('Network error during file upload. Check your internet connection and try again.'));
+    });
+
+    xhr.addEventListener('abort', () => {
+      reject(new Error('Upload was cancelled.'));
+    });
+
+    xhr.send(file);
+  });
+
+  // Generate the public URL via the Supabase client
   const { data: urlData } = supabase.storage
     .from('sermon-uploads')
-    .getPublicUrl(data.path);
+    .getPublicUrl(path);
 
   if (!urlData?.publicUrl) {
     throw new Error('Could not generate a public URL for the uploaded file. Make sure the "sermon-uploads" bucket is set to Public.');
   }
 
-  return { path: data.path, publicUrl: urlData.publicUrl };
+  return { path, publicUrl: urlData.publicUrl };
 }
 
 async function deleteFromStorage(path) {
@@ -276,27 +328,33 @@ async function callClaudeAPI(requestBody) {
  */
 export async function analyzeSermon(mediaFile, context = {}, onStatus) {
   const status = typeof onStatus === 'function' ? onStatus : () => {};
-  const fileSizeMB = mediaFile.size / (1024 * 1024);
+  const fileSize = mediaFile.size;
+  const fileSizeGB = fileSize / (1024 * 1024 * 1024);
+  const humanSize = formatFileSize(fileSize);
 
-  if (fileSizeMB > 500) {
+  // Hard limit: 5 GB (browser uploads beyond this are unreliable)
+  if (fileSizeGB > 5) {
     throw new Error(
-      `File is ${fileSizeMB.toFixed(0)}MB — too large. Please use a recording under 500MB, or compress the file first.`
+      `File is ${humanSize} — too large for browser upload. `
+      + 'For best results, compress the video (use HandBrake — it\'s free) or extract just the audio '
+      + '(which is all Gamaliel needs for analysis). A 60-minute sermon audio is typically under 200 MB.'
     );
   }
 
-  if (fileSizeMB > 200) {
-    console.warn(
-      `Large file (${fileSizeMB.toFixed(0)}MB). Upload and transcription may take a while.`
-    );
+  // Warn for large files but allow them
+  if (fileSizeGB > 1) {
+    console.warn(`Large file (${humanSize}). Upload may take a while on slower connections.`);
   }
 
-  // ── Step 1: Upload to Supabase Storage ──
-  status('upload', 'Uploading sermon to secure storage...');
+  // ── Step 1: Upload to Supabase Storage with progress ──
+  status('upload', `Uploading ${humanSize} to secure storage — 0%`);
   let storagePath = null;
   let publicUrl;
 
   try {
-    const upload = await uploadToStorage(mediaFile);
+    const upload = await uploadToStorage(mediaFile, (pct, loaded, total) => {
+      status('upload', `Uploading ${humanSize} to secure storage — ${pct}%`);
+    });
     storagePath = upload.path;
     publicUrl = upload.publicUrl;
   } catch (err) {

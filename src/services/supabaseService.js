@@ -18,7 +18,7 @@ export { supabaseUrl, supabaseAnonKey };
 // AUTHENTICATION
 // ============================================================================
 
-/** Sign up with email + password. Returns the user on success. */
+/** Sign up with email + password. Returns { user, session } on success. */
 export async function signUpWithEmail(email, password, fullName) {
   if (!supabase) throw new Error('Supabase not configured.');
 
@@ -31,6 +31,18 @@ export async function signUpWithEmail(email, password, fullName) {
   });
 
   if (error) throw error;
+
+  // Supabase returns a user with empty identities (and no error) when the
+  // email already exists — this prevents email enumeration. Detect it and
+  // give the user a clear message.
+  if (data.user && data.user.identities?.length === 0) {
+    throw new Error('An account with this email already exists. Try logging in instead.');
+  }
+
+  if (!data.user) {
+    throw new Error('Sign up failed — no user was returned. Please try again.');
+  }
+
   return data;
 }
 

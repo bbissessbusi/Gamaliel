@@ -345,6 +345,10 @@ export default function GamalielApp() {
   const [savedEvaluations, setSavedEvaluations] = useState([]);
   const fileInputRef = useRef(null);
 
+  // Guard: when handleLogin / handleSignUp are actively navigating,
+  // the onAuthStateChange listener should not override their navigation.
+  const manualAuthInProgress = useRef(false);
+
   // ── Auth: check session on mount + listen for auth state changes ──
   useEffect(() => {
     let mounted = true;
@@ -354,7 +358,6 @@ export default function GamalielApp() {
       if (!mounted) return;
       if (session?.user) {
         setCurrentUser(session.user);
-        // Returning user with persisted session → welcome back → dashboard
         setCurrentPage('welcome-back');
       } else {
         setCurrentPage('login');
@@ -366,6 +369,9 @@ export default function GamalielApp() {
     // Listen for auth events (handles OAuth redirect callbacks, sign-out, etc.)
     const { data: { subscription } } = onAuthStateChange((event, session) => {
       if (!mounted) return;
+
+      // Skip if a manual login/signup handler is already navigating
+      if (manualAuthInProgress.current) return;
 
       if (event === 'SIGNED_IN' && session?.user) {
         setCurrentUser(session.user);
@@ -658,23 +664,34 @@ export default function GamalielApp() {
   // ── Auth handlers (real Supabase auth) ──
 
   const handleLogin = async (email, password) => {
-    const { session } = await signInWithEmail(email, password);
-    // onAuthStateChange will fire SIGNED_IN and handle navigation
-    // But as a fallback, if the listener hasn't fired yet:
-    if (session?.user) {
-      setCurrentUser(session.user);
-      setCurrentPage('welcome-back');
-      window.scrollTo(0, 0);
+    manualAuthInProgress.current = true;
+    try {
+      const { session } = await signInWithEmail(email, password);
+      if (session?.user) {
+        setCurrentUser(session.user);
+        setCurrentPage('welcome-back');
+        window.scrollTo(0, 0);
+      }
+    } finally {
+      // Release the guard after a short delay so the onAuthStateChange
+      // listener doesn't immediately override the page we just set.
+      setTimeout(() => { manualAuthInProgress.current = false; }, 1000);
     }
   };
 
   const handleSignUp = async (fullName, email, password) => {
-    const { user } = await signUpWithEmail(email, password, fullName);
-    // New user — always go to guided tour
-    if (user) {
-      setCurrentUser(user);
+    manualAuthInProgress.current = true;
+    try {
+      // signUpWithEmail throws on error (caught by SignUpPage's try/catch)
+      const { user, session } = await signUpWithEmail(email, password, fullName);
+
+      // Set user (session may be null if email confirmation is required —
+      // the user will confirm via the email Supabase sends automatically).
+      setCurrentUser(session?.user || user);
       setCurrentPage('tour');
       window.scrollTo(0, 0);
+    } finally {
+      setTimeout(() => { manualAuthInProgress.current = false; }, 1000);
     }
   };
 

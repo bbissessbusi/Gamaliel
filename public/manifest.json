@@ -1,7 +1,8 @@
 {
-  "name": "Gamaliel — Homiletics Scorecard",
+  "name": "Gamaliel — AI Sermon Coach & Homiletics Scorecard",
   "short_name": "Gamaliel",
-  "description": "Premium digital analysis of sermon weight, structure, and delivery.",
+  "description": "AI-powered sermon analysis for preachers. Upload your sermon and get a homiletics scorecard with theological, structural, and delivery scores plus personalized coaching.",
+  "categories": ["education", "lifestyle"],
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

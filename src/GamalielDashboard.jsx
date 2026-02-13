@@ -362,7 +362,8 @@ export default function GamalielApp() {
       if (!mounted) return;
       if (session?.user) {
         setCurrentUser(session.user);
-        setCurrentPage('welcome-back');
+        // Already logged in — go straight to the scorecard
+        setCurrentPage('dashboard');
       } else {
         setCurrentPage('login');
       }
@@ -370,7 +371,8 @@ export default function GamalielApp() {
       if (mounted) setCurrentPage('login');
     });
 
-    // Listen for auth events (handles OAuth redirect callbacks, sign-out, etc.)
+    // Listen for auth events (handles OAuth redirect callbacks, email
+    // verification returns, sign-out, etc.)
     const { data: { subscription } } = onAuthStateChange((event, session) => {
       if (!mounted) return;
 
@@ -380,15 +382,18 @@ export default function GamalielApp() {
       if (event === 'SIGNED_IN' && session?.user) {
         setCurrentUser(session.user);
 
-        // Determine if this is a brand-new user (created within the last 30 seconds)
+        // Determine if this is a brand-new user (created within the last 60 seconds)
         const createdAt = new Date(session.user.created_at).getTime();
         const now = Date.now();
-        const isNewUser = (now - createdAt) < 30000;
+        const isNewUser = (now - createdAt) < 60000;
 
         if (isNewUser) {
-          setCurrentPage('tour');
-        } else {
+          // New user (e.g. just verified email or OAuth first-time) → welcome → tour
+          isNewSignUp.current = true;
           setCurrentPage('welcome-back');
+        } else {
+          // Returning user → straight to scorecard
+          setCurrentPage('dashboard');
         }
         window.scrollTo(0, 0);
       } else if (event === 'SIGNED_OUT') {
@@ -673,7 +678,8 @@ export default function GamalielApp() {
       const { session } = await signInWithEmail(email, password);
       if (session?.user) {
         setCurrentUser(session.user);
-        setCurrentPage('welcome-back');
+        // Returning users go straight to the scorecard — no waiting
+        setCurrentPage('dashboard');
         window.scrollTo(0, 0);
       }
     } finally {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Logo from './components/Logo';
+import { resendConfirmationEmail } from './services/supabaseService';
 
 export default function LoginPage({ onLogin, onOAuthLogin, onNavigateSignUp, onNavigateForgotPassword }) {
   const [email, setEmail] = useState('');
@@ -9,6 +10,9 @@ export default function LoginPage({ onLogin, onOAuthLogin, onNavigateSignUp, onN
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [emailNotConfirmed, setEmailNotConfirmed] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
 
   // Load remembered email on mount
   useEffect(() => {
@@ -27,6 +31,8 @@ export default function LoginPage({ onLogin, onOAuthLogin, onNavigateSignUp, onN
     }
     setLoading(true);
     setError('');
+    setEmailNotConfirmed(false);
+    setResendSuccess(false);
     try {
       // Save or clear remembered email
       if (rememberMe) {
@@ -36,9 +42,28 @@ export default function LoginPage({ onLogin, onOAuthLogin, onNavigateSignUp, onN
       }
       await onLogin(email, password);
     } catch (err) {
-      setError(err.message || 'Login failed. Please try again.');
+      const msg = (err.message || '').toLowerCase();
+      if (msg.includes('email not confirmed') || msg.includes('email_not_confirmed')) {
+        setEmailNotConfirmed(true);
+        setError('Your email hasn\u2019t been confirmed yet. Check your inbox (and spam folder) for the confirmation link, or resend it below.');
+      } else {
+        setError(err.message || 'Login failed. Please try again.');
+      }
     }
     setLoading(false);
+  };
+
+  const handleResendConfirmation = async () => {
+    setResending(true);
+    setResendSuccess(false);
+    try {
+      await resendConfirmationEmail(email);
+      setResendSuccess(true);
+      setError('');
+    } catch (err) {
+      setError(err.message || 'Failed to resend confirmation email. Please try again.');
+    }
+    setResending(false);
   };
 
   const handleOAuth = async (provider) => {
@@ -81,6 +106,26 @@ export default function LoginPage({ onLogin, onOAuthLogin, onNavigateSignUp, onN
             <div className="w-full mb-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-center">
               <p className="text-[10px] text-red-400 font-bold uppercase tracking-wider" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                 {error}
+              </p>
+              {emailNotConfirmed && (
+                <button
+                  type="button"
+                  onClick={handleResendConfirmation}
+                  disabled={resending}
+                  className="mt-3 px-4 py-2 rounded-lg bg-[#FF4500]/20 border border-[#FF4500]/40 hover:bg-[#FF4500]/30 transition-all text-[10px] text-[#FF4500] font-bold uppercase tracking-[0.15em]"
+                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                >
+                  {resending ? 'SENDING...' : 'RESEND CONFIRMATION EMAIL'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Resend Success */}
+          {resendSuccess && (
+            <div className="w-full mb-4 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center">
+              <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                Confirmation email sent! Check your inbox and click the link, then come back here and log in.
               </p>
             </div>
           )}

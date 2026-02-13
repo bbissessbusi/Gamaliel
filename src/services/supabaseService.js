@@ -60,6 +60,21 @@ export async function signInWithEmail(email, password) {
   return data;
 }
 
+/** Resend the confirmation email for an unverified account. */
+export async function resendConfirmationEmail(email) {
+  if (!supabase) throw new Error('Supabase not configured.');
+
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email,
+    options: {
+      emailRedirectTo: window.location.origin,
+    },
+  });
+
+  if (error) throw error;
+}
+
 /** Sign in (or sign up) with Google or Apple. Redirects the browser. */
 export async function signInWithOAuth(provider) {
   if (!supabase) throw new Error('Supabase not configured.');

@@ -349,6 +349,10 @@ export default function GamalielApp() {
   // the onAuthStateChange listener should not override their navigation.
   const manualAuthInProgress = useRef(false);
 
+  // Track whether the current session started from a fresh signup,
+  // so we can route: welcome-back → tour → dashboard (instead of → dashboard).
+  const isNewSignUp = useRef(false);
+
   // ── Auth: check session on mount + listen for auth state changes ──
   useEffect(() => {
     let mounted = true;
@@ -685,10 +689,16 @@ export default function GamalielApp() {
       // signUpWithEmail throws on error (caught by SignUpPage's try/catch)
       const { user, session } = await signUpWithEmail(email, password, fullName);
 
+      // Save the email so the login form is pre-filled next time (Remember Me)
+      localStorage.setItem('gamaliel_remembered_email', email);
+
       // Set user (session may be null if email confirmation is required —
       // the user will confirm via the email Supabase sends automatically).
       setCurrentUser(session?.user || user);
-      setCurrentPage('tour');
+
+      // Mark as new signup so welcome-back routes to tour next
+      isNewSignUp.current = true;
+      setCurrentPage('welcome-back');
       window.scrollTo(0, 0);
     } finally {
       setTimeout(() => { manualAuthInProgress.current = false; }, 1000);
@@ -1075,7 +1085,15 @@ export default function GamalielApp() {
           onNavigateLogin={() => { setCurrentPage('login'); window.scrollTo(0, 0); }}
         />
       ) : currentPage === 'welcome-back' ? (
-        <WelcomeBackPage onContinue={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} />
+        <WelcomeBackPage onContinue={() => {
+          if (isNewSignUp.current) {
+            isNewSignUp.current = false;
+            setCurrentPage('tour');
+          } else {
+            setCurrentPage('dashboard');
+          }
+          window.scrollTo(0, 0);
+        }} />
       ) : currentPage === 'tour' ? (
         <GuidedTourPage onBack={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onSkip={() => { setCurrentPage('dashboard'); window.scrollTo(0, 0); }} onLogoClick={navigateHome} />
       ) : currentPage === 'glossary' ? (

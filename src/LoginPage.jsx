@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Logo from './components/Logo';
 
 export default function LoginPage({ onLogin, onOAuthLogin, onNavigateSignUp, onNavigateForgotPassword }) {
@@ -7,6 +7,17 @@ export default function LoginPage({ onLogin, onOAuthLogin, onNavigateSignUp, onN
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState('');
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Load remembered email on mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('gamaliel_remembered_email');
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,6 +28,12 @@ export default function LoginPage({ onLogin, onOAuthLogin, onNavigateSignUp, onN
     setLoading(true);
     setError('');
     try {
+      // Save or clear remembered email
+      if (rememberMe) {
+        localStorage.setItem('gamaliel_remembered_email', email);
+      } else {
+        localStorage.removeItem('gamaliel_remembered_email');
+      }
       await onLogin(email, password);
     } catch (err) {
       setError(err.message || 'Login failed. Please try again.');
@@ -153,15 +170,61 @@ export default function LoginPage({ onLogin, onOAuthLogin, onNavigateSignUp, onN
               </label>
               <div className="login-input-wrapper relative">
                 <input
-                  className="w-full bg-white/5 border-0 rounded-xl px-4 py-3 text-sm placeholder:text-white/20 focus:ring-0 focus:outline-none text-white"
+                  className="w-full bg-white/5 border-0 rounded-xl px-4 py-3 pr-12 text-sm placeholder:text-white/20 focus:ring-0 focus:outline-none text-white"
                   style={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.1em', fontSize: '16px' }}
                   placeholder="••••••••"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 transition-colors z-10"
+                  style={{ minWidth: '24px', minHeight: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  tabIndex={-1}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                      <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
               </div>
+            </div>
+
+            {/* Remember Me */}
+            <div className="flex items-center gap-3 px-1">
+              <button
+                type="button"
+                onClick={() => setRememberMe(!rememberMe)}
+                className="relative w-5 h-5 rounded-md border border-white/20 hover:border-white/40 transition-all flex items-center justify-center flex-shrink-0"
+                style={{ background: rememberMe ? 'linear-gradient(135deg, #FF4500, #8B008B)' : 'rgba(255,255,255,0.05)' }}
+                aria-label="Remember me"
+              >
+                {rememberMe && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </button>
+              <span
+                className="text-[10px] text-white/50 uppercase tracking-[0.15em] cursor-pointer select-none"
+                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                onClick={() => setRememberMe(!rememberMe)}
+              >
+                Remember Me
+              </span>
             </div>
 
             <div className="pt-4">

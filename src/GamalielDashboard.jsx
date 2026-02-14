@@ -459,6 +459,7 @@ export default function GamalielApp() {
   // Gamaliel AI Analysis — Upload → Transcribe (Deepgram) → Analyze (Claude)
   const runAnalysis = async (file) => {
     setIsAnalyzing(true);
+    setAnalysisStatus('');
     setAnalysisMilestone('');
 
     // Milestone ticker for the Claude analysis phase
@@ -468,6 +469,7 @@ export default function GamalielApp() {
       setAnalysisStatus(message);
 
       const milestoneMap = {
+        'preflight': 'Verifying Supabase, Deepgram, and Claude connections...',
         'upload': 'Securely uploading your file to temporary storage...',
         'transcribe': 'Converting speech to text with Deepgram AI...',
         'transcribe-done': 'Transcript ready — preparing for Gamaliel...',
@@ -556,8 +558,14 @@ export default function GamalielApp() {
     } catch (error) {
       if (milestoneInterval) clearInterval(milestoneInterval);
       setAnalysisStatus(`Error: ${error.message}`);
-      setAnalysisMilestone('');
-      await new Promise(r => setTimeout(r, 6000));
+      setAnalysisMilestone('Check the details above, fix the issue, and try again.');
+      // Keep isAnalyzing true briefly so the status area stays visible,
+      // then stop the spinner but KEEP the error message visible.
+      await new Promise(r => setTimeout(r, 800));
+      setIsAnalyzing(false);
+      // Don't clear analysisStatus/analysisMilestone here — let the error
+      // persist so the user can read it. It clears on next analysis start.
+      return;
     }
 
     await new Promise(r => setTimeout(r, 800));

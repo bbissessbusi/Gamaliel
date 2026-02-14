@@ -132,6 +132,7 @@ async function uploadToStorage(file, onProgress) {
     xhr.open('POST', uploadUrl, true);
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.setRequestHeader('Content-Type', getMimeType(file));
+    xhr.setRequestHeader('x-upsert', 'true');
 
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable && typeof onProgress === 'function') {
@@ -331,13 +332,60 @@ async function callClaudeAPI(requestBody) {
   }
 }
 
+// ── Preflight: verify API endpoints are reachable before uploading ───
+
+async function preflightCheck() {
+  const issues = [];
+
+  // Check Supabase is configured
+  if (!supabase || !supabaseUrl || !supabaseAnonKey) {
+    issues.push(
+      'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.'
+    );
+  }
+
+  // Check that /api/transcribe is reachable (Vercel Edge Function)
+  try {
+    const res = await fetch('/api/transcribe', { method: 'OPTIONS' });
+    // OPTIONS returning 200 means the route exists
+    if (res.status === 404) {
+      issues.push(
+        'The /api/transcribe endpoint was not found. Make sure you are running "vercel dev" locally (not "vite dev" or "npm run dev"), or that the project is deployed to Vercel.'
+      );
+    }
+  } catch {
+    issues.push(
+      'Cannot reach the transcription API at /api/transcribe. If running locally, use "vercel dev" instead of "npm run dev". If deployed, check your Vercel deployment.'
+    );
+  }
+
+  // Check that /api/analyze is reachable (Vercel Edge Function)
+  try {
+    const res = await fetch('/api/analyze', { method: 'OPTIONS' });
+    if (res.status === 404) {
+      issues.push(
+        'The /api/analyze endpoint was not found. Make sure you are running "vercel dev" locally (not "vite dev" or "npm run dev"), or that the project is deployed to Vercel.'
+      );
+    }
+  } catch {
+    issues.push(
+      'Cannot reach the analysis API at /api/analyze. If running locally, use "vercel dev" instead of "npm run dev". If deployed, check your Vercel deployment.'
+    );
+  }
+
+  if (issues.length > 0) {
+    throw new Error(issues.join('\n\n'));
+  }
+}
+
 // ── Main entry point ─────────────────────────────────────────────────
 
 /**
  * Analyze a sermon recording using Deepgram (transcription) + Claude (analysis).
  *
- * Flow: Upload file to Supabase Storage → Deepgram transcribes from URL →
- *       Claude analyzes the transcript text → cleanup temp file.
+ * Flow: Preflight checks → Upload file to Supabase Storage →
+ *       Deepgram transcribes from URL → Claude analyzes the transcript →
+ *       cleanup temp file.
  *
  * @param {File}     mediaFile - The audio or video file to analyze
  * @param {object}   context   - Optional { title, goal, date }
@@ -363,6 +411,10 @@ export async function analyzeSermon(mediaFile, context = {}, onStatus) {
   if (fileSizeGB > 1) {
     console.warn(`Large file (${humanSize}). Upload may take a while on slower connections.`);
   }
+
+  // ── Preflight: verify everything is wired up before uploading ──
+  status('preflight', 'Checking API connections...');
+  await preflightCheck();
 
   // ── Step 1: Upload to Supabase Storage with progress ──
   status('upload', `Uploading ${humanSize} to secure storage — 0%`);

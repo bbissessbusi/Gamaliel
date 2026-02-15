@@ -181,7 +181,13 @@ async function uploadToStorage(file, onProgress) {
     });
 
     xhr.addEventListener('error', () => {
-      reject(new Error('Network error during file upload. Check your internet connection and try again.'));
+      reject(new Error(
+        'Network error during file upload. This is usually caused by one of:\n'
+        + '1. The Supabase project is paused (free-tier projects pause after 7 days of inactivity) — go to supabase.com/dashboard and click "Restore".\n'
+        + '2. CORS is blocking the upload — make sure the "sermon-uploads" bucket is set to Public in Supabase Storage settings.\n'
+        + '3. Your internet connection dropped during upload.\n'
+        + 'Check your Supabase dashboard and try again.'
+      ));
     });
 
     xhr.addEventListener('abort', () => {
@@ -212,6 +218,33 @@ async function deleteFromStorage(path) {
   }
 }
 
+// ── Retry helper ──────────────────────────────────────────────────────
+
+async function fetchWithRetry(url, options, { retries = 2, backoffMs = 2000 } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      // Don't retry client errors (4xx) — only retry network/server failures
+      if (response.ok || (response.status >= 400 && response.status < 500)) {
+        return response;
+      }
+      // 5xx — server error, worth retrying
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, backoffMs * (attempt + 1)));
+        continue;
+      }
+      return response; // last attempt, return whatever we got
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, backoffMs * (attempt + 1)));
+      }
+    }
+  }
+  throw lastError;
+}
+
 // ── Transcription: Deepgram via Edge Function ────────────────────────
 
 async function transcribeAudio(fileUrl) {
@@ -219,7 +252,7 @@ async function transcribeAudio(fileUrl) {
   const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 min
 
   try {
-    const response = await fetch('/api/transcribe', {
+    const response = await fetchWithRetry('/api/transcribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fileUrl }),
@@ -282,7 +315,7 @@ async function callClaudeAPI(requestBody) {
   const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 min
 
   try {
-    const response = await fetch('/api/analyze', {
+    const response = await fetchWithRetry('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),
@@ -332,44 +365,48 @@ async function callClaudeAPI(requestBody) {
   }
 }
 
-// ── Preflight: verify API endpoints are reachable before uploading ───
+// ── Preflight: verify ALL services are connected before uploading ────
+//
+// Uses the /api/health endpoint to actually test Supabase, Deepgram, and
+// Anthropic connections server-side (where the real API keys live).
+// This catches invalid keys, missing buckets, expired keys, etc. BEFORE
+// the user waits through a long upload.
 
 async function preflightCheck() {
   const issues = [];
 
-  // Check Supabase is configured
+  // Client-side: check Supabase env vars are present
   if (!supabase || !supabaseUrl || !supabaseAnonKey) {
     issues.push(
-      'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.'
+      'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file and to Vercel Environment Variables.'
     );
   }
 
-  // Check that /api/transcribe is reachable (Vercel Edge Function)
+  // Server-side: use /api/health to test all three services with real API keys
   try {
-    const res = await fetch('/api/transcribe', { method: 'OPTIONS' });
-    // OPTIONS returning 200 means the route exists
-    if (res.status === 404) {
-      issues.push(
-        'The /api/transcribe endpoint was not found. Make sure you are running "vercel dev" locally (not "vite dev" or "npm run dev"), or that the project is deployed to Vercel.'
-      );
-    }
-  } catch {
-    issues.push(
-      'Cannot reach the transcription API at /api/transcribe. If running locally, use "vercel dev" instead of "npm run dev". If deployed, check your Vercel deployment.'
-    );
-  }
+    const res = await fetch('/api/health');
 
-  // Check that /api/analyze is reachable (Vercel Edge Function)
-  try {
-    const res = await fetch('/api/analyze', { method: 'OPTIONS' });
     if (res.status === 404) {
+      // Health endpoint not deployed — fall back to basic endpoint checks
       issues.push(
-        'The /api/analyze endpoint was not found. Make sure you are running "vercel dev" locally (not "vite dev" or "npm run dev"), or that the project is deployed to Vercel.'
+        'The /api/health endpoint was not found. Make sure you are running on Vercel (use "vercel dev" locally, not "vite dev"), or that the latest code is deployed.'
       );
+    } else {
+      const health = await res.json();
+
+      if (!health.services?.supabase?.ok) {
+        issues.push(`Supabase: ${health.services?.supabase?.message || 'Connection failed.'}`);
+      }
+      if (!health.services?.deepgram?.ok) {
+        issues.push(`Deepgram: ${health.services?.deepgram?.message || 'Connection failed.'}`);
+      }
+      if (!health.services?.anthropic?.ok) {
+        issues.push(`Claude AI: ${health.services?.anthropic?.message || 'Connection failed.'}`);
+      }
     }
   } catch {
     issues.push(
-      'Cannot reach the analysis API at /api/analyze. If running locally, use "vercel dev" instead of "npm run dev". If deployed, check your Vercel deployment.'
+      'Cannot reach the Gamaliel API. If running locally, use "vercel dev" instead of "npm run dev". If deployed, check your Vercel deployment status.'
     );
   }
 

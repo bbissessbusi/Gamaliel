@@ -1,0 +1,19 @@
+{
+  "name": "Gamaliel — AI Sermon Coach & Homiletics Scorecard",
+  "short_name": "Gamaliel",
+  "description": "AI-powered sermon analysis for preachers. Upload your sermon and get a homiletics scorecard with theological, structural, and delivery scores plus personalized coaching.",
+  "categories": ["education", "lifestyle"],
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070304",
+  "theme_color": "#070304",
+  "icons": [
+    {
+      "src": "/Applogo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

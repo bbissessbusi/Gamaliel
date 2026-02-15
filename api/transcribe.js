@@ -27,7 +27,10 @@ export default async function handler(req) {
     );
   }
 
-  const deepgramKey = (process.env.DEEPGRAM_API_KEY || '').trim();
+  // Strip quotes, zero-width chars, and whitespace from the env value
+  const deepgramKey = (process.env.DEEPGRAM_API_KEY || '')
+    .replace(/^["'\s\u200B\uFEFF]+|["'\s\u200B\uFEFF]+$/g, '')
+    .trim();
 
   if (!deepgramKey) {
     return Response.json(

@@ -25,8 +25,11 @@ export default async function handler(req) {
     );
   }
 
-  // Read API key from server-side environment only
-  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim();
+  // Read API key — strip quotes, zero-width chars, and whitespace that
+  // users accidentally paste into Vercel environment variable values.
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '')
+    .replace(/^["'\s\u200B\uFEFF]+|["'\s\u200B\uFEFF]+$/g, '')
+    .trim();
 
   if (!apiKey) {
     return Response.json(

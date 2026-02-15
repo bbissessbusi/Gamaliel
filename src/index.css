@@ -1,3 +1,44 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── iOS / Mobile-first overrides ─────────────────────────────── */
+
+/* Prevent iOS bounce overscroll showing white behind the app */
+html, body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Minimum readable font size on small phones (375px).
+   Tailwind classes like text-[7px] / text-[8px] / text-[9px] are unreadable
+   on real devices. This bumps them to at least 11px on mobile. */
+@media (max-width: 640px) {
+  /* Labels, captions, and meta text */
+  .text-\[7px\],
+  .text-\[8px\] {
+    font-size: 11px !important;
+  }
+  .text-\[9px\] {
+    font-size: 11px !important;
+  }
+  .text-\[10px\] {
+    font-size: 12px !important;
+  }
+  .text-\[11px\] {
+    font-size: 12px !important;
+  }
+
+  /* Ensure buttons and interactive elements have adequate touch targets */
+  button, [role="button"], a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Exception: inline icon buttons (like the X to remove a file) can be smaller
+     but still need enough padding for tap accuracy */
+  button.rounded-full {
+    min-height: 32px;
+    min-width: 32px;
+  }
+}

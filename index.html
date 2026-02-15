@@ -2,10 +2,114 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gamaliel Dashboard - Homiletics Scorecard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5, user-scalable=yes" />
+
+    <!-- ── SEO: Primary meta ─────────────────────────────────────── -->
+    <title>Gamaliel — AI Sermon Coach & Homiletics Scorecard for Preachers</title>
+    <meta name="description" content="Gamaliel is a premium AI-powered sermon analysis tool that helps preachers improve their preaching. Upload your sermon audio or video and get a detailed homiletics scorecard covering theological fidelity, clarity, delivery, and actionable coaching. Built for pastors, ministers, and Bible teachers who want to sharpen their craft." />
+    <meta name="keywords" content="sermon analysis, preaching tool, homiletics scorecard, AI sermon coach, improve preaching, sermon feedback, preaching improvement, pastor tools, sermon evaluation, sermon grading, preaching skills, Bible teaching tool, sermon delivery, Gamaliel, homiletics, preaching app, sermon review, church technology, ministry tools, sermon preparation, preaching coaching, sermon assessment" />
+    <meta name="author" content="The Scribes Inc." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://gamaliel.app" />
+
+    <!-- ── SEO: Open Graph (Facebook, LinkedIn, iMessage previews) ── -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Gamaliel — AI Sermon Coach & Homiletics Scorecard" />
+    <meta property="og:description" content="Upload your sermon and get an AI-powered homiletics scorecard. Gamaliel analyzes theological fidelity, structural weight, and vocal cadence to help preachers improve their craft." />
+    <meta property="og:image" content="/Applogo.png" />
+    <meta property="og:site_name" content="Gamaliel" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- ── SEO: Twitter Card ──────────────────────────────────────── -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Gamaliel — AI Sermon Coach for Preachers" />
+    <meta name="twitter:description" content="Analyze your sermon with AI. Get scores on theological fidelity, clarity, delivery, and a personalized coaching step. Free for pastors and Bible teachers." />
+    <meta name="twitter:image" content="/Applogo.png" />
+
+    <!-- ── SEO: JSON-LD Structured Data (Google, AI models, Bing) ── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Gamaliel",
+      "alternateName": "Gamaliel Homiletics Scorecard",
+      "applicationCategory": "ReligiousApp",
+      "operatingSystem": "iOS, Web",
+      "description": "Gamaliel is an AI-powered sermon analysis and coaching tool. It evaluates sermons across theological fidelity, exegetical soundness, gospel centrality, structural weight (relevancy, clarity, connectivity, precision, call to action), and vocal cadence (relatability, pacing, enthusiasm, charisma). Designed for pastors, preachers, ministers, Bible teachers, and seminary students who want data-driven feedback to improve their preaching and homiletics skills.",
+      "featureList": [
+        "AI sermon transcription and analysis",
+        "Homiletics scorecard with 12 evaluation criteria",
+        "Theological fidelity assessment",
+        "Structural weight scoring (relevancy, clarity, connectivity, precision, call to action)",
+        "Vocal cadence scoring (relatability, pacing, enthusiasm, charisma)",
+        "Personalized coaching and improvement steps",
+        "Sermon history and progress tracking",
+        "Audio and video sermon upload support",
+        "Works on iPhone, iPad, and web browsers"
+      ],
+      "screenshot": "/Applogo.png",
+      "author": {
+        "@type": "Organization",
+        "name": "The Scribes Inc."
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "description": "Free beta access for pastors and preachers"
+      },
+      "audience": {
+        "@type": "Audience",
+        "audienceType": "Pastors, Preachers, Ministers, Bible Teachers, Seminary Students, Church Leaders, Homiletics Students"
+      },
+      "keywords": "sermon analysis, preaching tool, homiletics, AI sermon coach, preaching improvement, pastor tools, sermon evaluation, sermon coaching, preaching feedback, Bible teaching, sermon preparation, ministry technology"
+    }
+    </script>
+
+    <!-- ── iOS / PWA meta ─────────────────────────────────────────── -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Gamaliel" />
+    <meta name="theme-color" content="#070304" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Icons & manifest -->
+    <link rel="apple-touch-icon" href="/Applogo.png" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Splash screen color while app loads -->
+    <style>html,body{background:#070304;}</style>
+
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=League+Script&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
   </head>
   <body>
+    <!-- Invisible semantic content for search engines and AI crawlers.
+         Hidden from users but readable by Google, Bing, ChatGPT,
+         and other AI models that index web pages. -->
+    <div id="seo" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">
+      <h1>Gamaliel — AI Sermon Coach and Homiletics Scorecard</h1>
+      <p>Gamaliel is a free AI-powered preaching improvement tool built for pastors, preachers, ministers, and Bible teachers. Upload your sermon recording (audio or video) and Gamaliel will transcribe it and provide a detailed homiletics scorecard with scores and personalized coaching.</p>
+      <h2>How Gamaliel Helps Preachers</h2>
+      <ul>
+        <li>Upload any sermon recording — audio or video, up to 60 minutes</li>
+        <li>AI transcription powered by Deepgram converts your sermon to text</li>
+        <li>Gamaliel AI (powered by Claude) analyzes your sermon across 12 criteria</li>
+        <li>Get a homiletics scorecard covering theological fidelity, exegetical soundness, gospel centrality, relevancy, clarity, connectivity, precision, call to action, relatability, pacing, enthusiasm, and charisma</li>
+        <li>Receive a personalized anchoring point (your strongest moment), structural drift (where you lost focus), and a measurable improvement step</li>
+        <li>Track your preaching progress over time with saved evaluations</li>
+      </ul>
+      <h2>Who Is Gamaliel For?</h2>
+      <p>Gamaliel is designed for anyone who preaches or teaches the Bible: senior pastors, associate pastors, youth pastors, lay preachers, guest speakers, seminary students studying homiletics, Bible study leaders, and church planters. Whether you preach weekly or occasionally, Gamaliel helps you sharpen your sermon delivery, structure, and theological accuracy.</p>
+      <h2>What Makes Gamaliel Different</h2>
+      <p>Unlike generic AI tools, Gamaliel is purpose-built for homiletics. It understands theological fidelity, exegetical soundness, and gospel centrality — not just grammar and delivery. It scores your sermon across three pillars: Sacred Foundation (pass/fail doctrinal checks), Structural Weight (relevancy, clarity, connectivity, precision, call to action scored 0-10), and Vocal Cadence (relatability, pacing, enthusiasm, charisma scored 0-10). Every evaluation ends with a specific, actionable coaching step you can practice before your next sermon.</p>
+      <h2>About the Name</h2>
+      <p>Gamaliel is named after the respected Jewish teacher mentioned in Acts 5:34 of the Bible — a wise and honored teacher of the law. Just as Gamaliel was known for his wisdom and measured counsel, this tool provides thoughtful, constructive feedback to help preachers grow in their craft.</p>
+      <p>Built by The Scribes Inc. Available on web and iOS.</p>
+    </div>
+
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

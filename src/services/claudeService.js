@@ -1,11 +1,18 @@
-// Claude AI Service for Gamaliel - Sermon Analysis
+// Claude AI Service for Gamaliel — Sermon Analysis
+//
+// Architecture: Upload to Supabase Storage → Transcribe (Deepgram) → Analyze (Claude)
+//
+// The Claude Messages API processes text and images — not raw audio/video.
+// So we first transcribe the recording to text via Deepgram, then send
+// the transcript to Claude for homiletics analysis.
 
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+import { supabase, supabaseUrl, supabaseAnonKey } from './supabaseService';
 
-// The system prompt that tells Claude how to be "Gamaliel" and analyze sermons
+// ── Gamaliel system prompt ───────────────────────────────────────────
+
 const GAMALIEL_SYSTEM_PROMPT = `You are Gamaliel, an expert homiletics (sermon) coach and analyzer. You are named after the respected Jewish teacher mentioned in the Bible (Acts 5:34). Your role is to provide thoughtful, constructive feedback on sermon delivery and content.
 
-You will analyze sermon recordings (audio or video) based on the Homiletics Scorecard framework. Your analysis should be encouraging yet honest, helping preachers grow in their craft.
+You will analyze sermon transcripts based on the Homiletics Scorecard framework. Your analysis should be encouraging yet honest, helping preachers grow in their craft.
 
 ## SCORING FRAMEWORK
 
@@ -55,166 +62,461 @@ Please provide your analysis in this structure:
 
 Be warm but honest. Your goal is to help preachers become more effective communicators of truth.`;
 
+// ── Helpers ───────────────────────────────────────────────────────────
+
+function generateId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+// Map file extensions → MIME types for audio/video formats the browser may not recognize
+const MIME_MAP = {
+  mp3: 'audio/mpeg', mp4: 'video/mp4', m4a: 'audio/mp4', m4v: 'video/mp4',
+  aac: 'audio/aac', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/opus',
+  flac: 'audio/flac', wav: 'audio/wav', wma: 'audio/x-ms-wma',
+  amr: 'audio/amr', webm: 'audio/webm', caf: 'audio/x-caf',
+  aiff: 'audio/aiff', aif: 'audio/aiff', '3gp': 'audio/3gpp',
+  '3gpp': 'audio/3gpp', mpga: 'audio/mpeg', mpeg: 'video/mpeg',
+  mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska',
+  wmv: 'video/x-ms-wmv',
+};
+
+function getMimeType(file) {
+  if (file.type) return file.type;
+  const ext = (file.name || '').split('.').pop()?.toLowerCase();
+  return MIME_MAP[ext] || 'application/octet-stream';
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+// ── Storage: upload file to Supabase with progress tracking ──────────
+
 /**
- * Convert a file (audio/video) to base64 format
+ * Upload a file to Supabase Storage using XMLHttpRequest for progress.
+ * @param {File}     file       - The file to upload
+ * @param {function} onProgress - Callback: (percent, loaded, total) => void
+ * @returns {Promise<{path, publicUrl}>}
  */
-async function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      // Remove the data URL prefix (e.g., "data:audio/mp3;base64,")
-      const base64 = reader.result.split(',')[1];
-      resolve(base64);
+async function uploadToStorage(file, onProgress) {
+  if (!supabase || !supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      'Supabase not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env and to Vercel environment variables.'
+    );
+  }
+
+  const ext = file.name?.split('.').pop() || 'mp3';
+  const path = `uploads/${generateId()}.${ext}`;
+
+  // Get auth token if logged in, otherwise fall back to anon key
+  let token = supabaseAnonKey;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) token = session.access_token;
+  } catch { /* use anon key */ }
+
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/sermon-uploads/${path}`;
+
+  // Use XMLHttpRequest for upload progress tracking (fetch API has no upload progress)
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', uploadUrl, true);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('Content-Type', getMimeType(file));
+    xhr.setRequestHeader('x-upsert', 'true');
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && typeof onProgress === 'function') {
+        onProgress(Math.round((e.loaded / e.total) * 100), e.loaded, e.total);
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        const raw = xhr.responseText || '';
+
+        // ── Payload too large (Supabase server-side file size limit) ──
+        if (xhr.status === 413 || raw.includes('Payload too large') || raw.includes('too large')) {
+          reject(new Error(
+            `Your file (${formatFileSize(file.size)}) exceeds the Supabase Storage upload size limit. `
+            + 'To fix this: go to your Supabase dashboard → Storage (left sidebar) → scroll down to "Upload file size limit" → '
+            + `increase it to at least ${formatFileSize(file.size)}. Then try again.`
+          ));
+          return;
+        }
+
+        // ── Bucket not found ──
+        if (xhr.status === 404 || raw.includes('Bucket not found') || raw.includes('does not exist')) {
+          reject(new Error(
+            'Storage bucket "sermon-uploads" does not exist. '
+            + 'Go to your Supabase dashboard → Storage → New Bucket → name it "sermon-uploads" → toggle Public ON → Create. '
+            + 'Then go to SQL Editor and run the storage policy SQL from supabase/schema.sql.'
+          ));
+          return;
+        }
+
+        // ── Permission denied ──
+        if (xhr.status === 403 || raw.includes('policy') || raw.includes('security') || raw.includes('Unauthorized')) {
+          reject(new Error(
+            'The "sermon-uploads" bucket exists but upload permission was denied. '
+            + 'Go to your Supabase dashboard → SQL Editor → '
+            + 'paste and run the storage policy SQL from supabase/schema.sql.'
+          ));
+          return;
+        }
+
+        reject(new Error(`Upload failed (HTTP ${xhr.status}): ${raw.slice(0, 300)}`));
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      reject(new Error('Network error during file upload. Check your internet connection and try again.'));
+    });
+
+    xhr.addEventListener('abort', () => {
+      reject(new Error('Upload was cancelled.'));
+    });
+
+    xhr.send(file);
+  });
+
+  // Generate the public URL via the Supabase client
+  const { data: urlData } = supabase.storage
+    .from('sermon-uploads')
+    .getPublicUrl(path);
+
+  if (!urlData?.publicUrl) {
+    throw new Error('Could not generate a public URL for the uploaded file. Make sure the "sermon-uploads" bucket is set to Public.');
+  }
+
+  return { path, publicUrl: urlData.publicUrl };
+}
+
+async function deleteFromStorage(path) {
+  if (!supabase) return;
+  try {
+    await supabase.storage.from('sermon-uploads').remove([path]);
+  } catch (e) {
+    console.warn('Storage cleanup failed (non-critical):', e.message);
+  }
+}
+
+// ── Transcription: Deepgram via Edge Function ────────────────────────
+
+async function transcribeAudio(fileUrl) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 min
+
+  try {
+    const response = await fetch('/api/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileUrl }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error(
+        `Transcription server returned invalid response (status ${response.status}). The /api/transcribe endpoint may not be deployed — use "vercel dev" locally.`
+      );
+    }
+
+    if (!response.ok) {
+      const msg =
+        data?.error?.message || `Transcription failed (HTTP ${response.status})`;
+      if (response.status === 500 && msg.includes('not configured')) {
+        throw new Error(
+          'Deepgram API key is missing. Add DEEPGRAM_API_KEY to your Vercel Environment Variables and redeploy. Get a free key at https://console.deepgram.com'
+        );
+      }
+      throw new Error(msg);
+    }
+
+    if (!data.transcript) {
+      throw new Error(
+        'Transcription returned empty. The file may be silent, corrupted, or in an unsupported audio format.'
+      );
+    }
+
+    return data;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error(
+        'Transcription timed out after 5 minutes. Try a shorter or smaller file.'
+      );
+    }
+    if (
+      err.message?.includes('Failed to fetch') ||
+      err.message?.includes('NetworkError') ||
+      err.message?.includes('Load failed')
+    ) {
+      throw new Error(
+        'Could not reach the transcription API. Make sure you are running on Vercel (use "vercel dev" locally, not "vite dev").'
+      );
+    }
+    throw err;
+  }
+}
+
+// ── Claude analysis via Edge Function ────────────────────────────────
+
+async function callClaudeAPI(requestBody) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 min
+
+  try {
+    const response = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error(
+        `Server returned invalid response (status ${response.status}). The /api/analyze endpoint may not be deployed — use "vercel dev" locally.`
+      );
+    }
+
+    if (!response.ok) {
+      const errorMsg =
+        data?.error?.message || `API error: ${response.status}`;
+      if (response.status === 500 && errorMsg.includes('not configured')) {
+        throw new Error(
+          'Anthropic API key is missing in Vercel. Add ANTHROPIC_API_KEY to your Vercel Environment Variables and redeploy.'
+        );
+      }
+      throw new Error(errorMsg);
+    }
+
+    return data;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error(
+        'Claude analysis timed out after 5 minutes. Try again or use a shorter recording.'
+      );
+    }
+    if (
+      err.message?.includes('Failed to fetch') ||
+      err.message?.includes('NetworkError') ||
+      err.message?.includes('Load failed')
+    ) {
+      throw new Error(
+        'Could not reach the Gamaliel API. Make sure you are running on Vercel (use "vercel dev" locally, not "vite dev").'
+      );
+    }
+    throw err;
+  }
+}
+
+// ── Preflight: verify API endpoints are reachable before uploading ───
+
+async function preflightCheck() {
+  const issues = [];
+
+  // Check Supabase is configured
+  if (!supabase || !supabaseUrl || !supabaseAnonKey) {
+    issues.push(
+      'Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.'
+    );
+  }
+
+  // Check that /api/transcribe is reachable (Vercel Edge Function)
+  try {
+    const res = await fetch('/api/transcribe', { method: 'OPTIONS' });
+    // OPTIONS returning 200 means the route exists
+    if (res.status === 404) {
+      issues.push(
+        'The /api/transcribe endpoint was not found. Make sure you are running "vercel dev" locally (not "vite dev" or "npm run dev"), or that the project is deployed to Vercel.'
+      );
+    }
+  } catch {
+    issues.push(
+      'Cannot reach the transcription API at /api/transcribe. If running locally, use "vercel dev" instead of "npm run dev". If deployed, check your Vercel deployment.'
+    );
+  }
+
+  // Check that /api/analyze is reachable (Vercel Edge Function)
+  try {
+    const res = await fetch('/api/analyze', { method: 'OPTIONS' });
+    if (res.status === 404) {
+      issues.push(
+        'The /api/analyze endpoint was not found. Make sure you are running "vercel dev" locally (not "vite dev" or "npm run dev"), or that the project is deployed to Vercel.'
+      );
+    }
+  } catch {
+    issues.push(
+      'Cannot reach the analysis API at /api/analyze. If running locally, use "vercel dev" instead of "npm run dev". If deployed, check your Vercel deployment.'
+    );
+  }
+
+  if (issues.length > 0) {
+    throw new Error(issues.join('\n\n'));
+  }
+}
+
+// ── Main entry point ─────────────────────────────────────────────────
+
+/**
+ * Analyze a sermon recording using Deepgram (transcription) + Claude (analysis).
+ *
+ * Flow: Preflight checks → Upload file to Supabase Storage →
+ *       Deepgram transcribes from URL → Claude analyzes the transcript →
+ *       cleanup temp file.
+ *
+ * @param {File}     mediaFile - The audio or video file to analyze
+ * @param {object}   context   - Optional { title, goal, date }
+ * @param {function} onStatus  - Callback: (phase, message) => void
+ * @returns {Promise<{fullAnalysis, scores, transcript, rawResponse}>}
+ */
+export async function analyzeSermon(mediaFile, context = {}, onStatus) {
+  const status = typeof onStatus === 'function' ? onStatus : () => {};
+  const fileSize = mediaFile.size;
+  const fileSizeGB = fileSize / (1024 * 1024 * 1024);
+  const humanSize = formatFileSize(fileSize);
+
+  // Hard limit: 5 GB (browser uploads beyond this are unreliable)
+  if (fileSizeGB > 5) {
+    throw new Error(
+      `File is ${humanSize} — too large for browser upload. `
+      + 'For best results, compress the video (use HandBrake — it\'s free) or extract just the audio '
+      + '(which is all Gamaliel needs for analysis). A 60-minute sermon audio is typically under 200 MB.'
+    );
+  }
+
+  // Warn for large files but allow them
+  if (fileSizeGB > 1) {
+    console.warn(`Large file (${humanSize}). Upload may take a while on slower connections.`);
+  }
+
+  // ── Preflight: verify everything is wired up before uploading ──
+  status('preflight', 'Checking API connections...');
+  await preflightCheck();
+
+  // ── Step 1: Upload to Supabase Storage with progress ──
+  status('upload', `Uploading ${humanSize} to secure storage — 0%`);
+  let storagePath = null;
+  let publicUrl;
+
+  try {
+    const upload = await uploadToStorage(mediaFile, (pct, loaded, total) => {
+      status('upload', `Uploading ${humanSize} to secure storage — ${pct}%`);
+    });
+    storagePath = upload.path;
+    publicUrl = upload.publicUrl;
+  } catch (err) {
+    throw new Error(`Upload failed: ${err.message}`);
+  }
+
+  try {
+    // ── Step 2: Transcribe with Deepgram ──
+    status(
+      'transcribe',
+      'Transcribing your sermon — this may take a few minutes for long recordings...'
+    );
+    const transcription = await transcribeAudio(publicUrl);
+    const transcript = transcription.transcript;
+    const durationMin = transcription.duration
+      ? (transcription.duration / 60).toFixed(1)
+      : null;
+    const wordCount = transcript.split(/\s+/).length;
+
+    status(
+      'transcribe-done',
+      `Transcription complete${durationMin ? ` (${durationMin} min, ` : ' ('}${wordCount} words)`
+    );
+
+    // ── Step 3: Analyze with Claude ──
+    status('analyze', 'Gamaliel is evaluating your sermon...');
+
+    let contextMessage =
+      'Please analyze this sermon based on the transcript below.\n\n';
+    if (context.title)
+      contextMessage += `Sermon Title/Scripture: ${context.title}\n`;
+    if (context.goal)
+      contextMessage += `Preacher's Primary Goal: ${context.goal}\n`;
+    if (context.date) contextMessage += `Preach Date: ${context.date}\n`;
+    if (durationMin)
+      contextMessage += `Recording Duration: ${durationMin} minutes\n`;
+    contextMessage += `\n--- SERMON TRANSCRIPT ---\n\n${transcript}`;
+
+    const requestBody = {
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 8192,
+      system: GAMALIEL_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: contextMessage,
+        },
+      ],
     };
-    reader.onerror = error => reject(error);
-  });
+
+    const data = await callClaudeAPI(requestBody);
+    const analysisText = data.content?.[0]?.text || '';
+    const scores = parseScoresFromResponse(analysisText);
+
+    status('done', 'Analysis complete!');
+
+    return {
+      fullAnalysis: analysisText,
+      scores,
+      transcript,
+      rawResponse: data,
+    };
+  } finally {
+    // Always clean up the temp file from storage
+    if (storagePath) {
+      deleteFromStorage(storagePath);
+    }
+  }
 }
 
-/**
- * Get the media type string for Claude API
- */
-function getMediaType(file) {
-  const type = file.type;
+// ── Score parsing ────────────────────────────────────────────────────
 
-  // Audio types
-  if (type.startsWith('audio/')) {
-    return type; // e.g., "audio/mp3", "audio/wav", "audio/m4a"
-  }
-
-  // Video types
-  if (type.startsWith('video/')) {
-    return type; // e.g., "video/mp4", "video/webm"
-  }
-
-  // Default fallback
-  return type;
-}
-
-/**
- * Analyze a sermon recording using Claude
- * @param {File} mediaFile - The audio or video file to analyze
- * @param {Object} context - Additional context about the sermon
- * @param {string} context.title - Sermon title or scripture reference
- * @param {string} context.goal - The preacher's primary goal for this sermon
- * @param {string} context.date - When the sermon was/will be preached
- * @returns {Promise<Object>} - Claude's analysis response
- */
-export async function analyzeSermon(mediaFile, context = {}) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-
-  if (!apiKey || apiKey === 'your-api-key-here') {
-    throw new Error('Please add your Anthropic API key to the .env file');
-  }
-
-  // Convert media file to base64
-  const base64Data = await fileToBase64(mediaFile);
-  const mediaType = getMediaType(mediaFile);
-
-  // Determine if it's audio or video
-  const isVideo = mediaType.startsWith('video/');
-
-  // Build the context message
-  let contextMessage = 'Please analyze this sermon recording.';
-  if (context.title) {
-    contextMessage += `\n\nSermon Title/Scripture: ${context.title}`;
-  }
-  if (context.goal) {
-    contextMessage += `\nPreacher's Primary Goal: ${context.goal}`;
-  }
-  if (context.date) {
-    contextMessage += `\nPreach Date: ${context.date}`;
-  }
-
-  // Build the request body
-  const requestBody = {
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 4096,
-    system: GAMALIEL_SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: isVideo ? 'video' : 'audio',
-            source: {
-              type: 'base64',
-              media_type: mediaType,
-              data: base64Data,
-            },
-          },
-          {
-            type: 'text',
-            text: contextMessage,
-          },
-        ],
-      },
-    ],
-  };
-
-  // Make the API request
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `API request failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  // Extract the text response
-  const analysisText = data.content?.[0]?.text || '';
-
-  // Parse the scores from the response (basic parsing)
-  const scores = parseScoresFromResponse(analysisText);
-
-  return {
-    fullAnalysis: analysisText,
-    scores,
-    rawResponse: data,
-  };
-}
-
-/**
- * Parse scores from Claude's response text
- * This is a simple parser - you might want to make it more robust
- */
 function parseScoresFromResponse(text) {
   const scores = {
-    // Sacred Foundation (true = pass, false = needs work)
     theologicalFidelity: null,
     exegeticalSoundness: null,
     gospelCentrality: null,
-
-    // Structural Weight (0-10)
     relevancy: null,
     clarity: null,
     connectivity: null,
     precision: null,
     callToAction: null,
-
-    // Vocal Cadence (0-10)
     relatability: null,
     pacing: null,
     enthusiasm: null,
     charisma: null,
   };
 
-  // Try to extract pass/fail for Sacred Foundation
   scores.theologicalFidelity = /theological fidelity[:\s]*pass/i.test(text);
   scores.exegeticalSoundness = /exegetical soundness[:\s]*pass/i.test(text);
   scores.gospelCentrality = /gospel centrality[:\s]*pass/i.test(text);
 
-  // Try to extract numeric scores (look for patterns like "Relevancy: 8" or "Relevancy - 8/10")
   const scorePatterns = {
     relevancy: /relevancy[:\s-]*(\d+)/i,
     clarity: /clarity[:\s-]*(\d+)/i,
@@ -237,6 +539,4 @@ function parseScoresFromResponse(text) {
   return scores;
 }
 
-export default {
-  analyzeSermon,
-};
+export default { analyzeSermon };

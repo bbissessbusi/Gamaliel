@@ -1,0 +1,578 @@
+// Claude AI Service for Gamaliel — Sermon Analysis (mobile)
+//
+// Architecture: Upload to Supabase Storage → Transcribe (Deepgram) → Analyze (Claude)
+//
+// The Claude Messages API processes text and images — not raw audio/video.
+// So we first transcribe the recording to text via Deepgram, then send
+// the transcript to Claude for homiletics analysis.
+//
+// Both /api/transcribe and /api/analyze are the SAME Vercel Edge Functions
+// the web app uses — see mobile/README.md for how EXPO_PUBLIC_API_BASE_URL
+// is configured, since a mobile app has no "same origin" to call relative
+// /api/ routes against.
+
+import * as FileSystem from 'expo-file-system/legacy';
+import { supabase, supabaseUrl, supabaseAnonKey } from './supabaseService';
+
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL || '').replace(/\/+$/, '');
+
+// ── Gamaliel system prompt ───────────────────────────────────────────
+
+const GAMALIEL_SYSTEM_PROMPT = `You are Gamaliel, an expert homiletics (sermon) coach and analyzer. You are named after the respected Jewish teacher mentioned in the Bible (Acts 5:34). Your role is to provide thoughtful, constructive feedback on sermon delivery and content.
+
+You will analyze sermon transcripts based on the Homiletics Scorecard framework. Your analysis should be encouraging yet honest, helping preachers grow in their craft.
+
+## SCORING FRAMEWORK
+
+### Section 1: Sacred Foundation (Pass/Fail Checkboxes)
+Evaluate these as either met or not met:
+- **Theological Fidelity**: Is the sermon doctrinally accurate? Does it align with sound biblical teaching?
+- **Exegetical Soundness**: Does the preacher properly interpret the scripture in context? Are they drawing meaning FROM the text rather than reading INTO it?
+- **Gospel Centrality**: Is Christ and the gospel message central to the sermon?
+
+### Section 2: Structural Weight (Score 0-10 each)
+- **Relevancy**: How well does the sermon connect to the listeners' real lives and current context?
+- **Clarity**: How clear and understandable is the message? Can listeners easily follow the main points?
+- **Connectivity**: How well do the sermon points connect to each other and flow logically?
+- **Precision**: How precise is the language? Is every word intentional and impactful?
+- **Call to Action**: How clear and compelling is the response the preacher is asking for?
+
+### Section 3: Vocal Cadence (Score 0-10 each)
+- **Relatability**: Does the preacher come across as authentic and relatable?
+- **Pacing**: Is the delivery speed appropriate? Are there good pauses for emphasis?
+- **Enthusiasm**: Does the preacher show genuine passion and energy for the message?
+- **Charisma**: Does the preacher have engaging presence and delivery style?
+
+## YOUR RESPONSE FORMAT
+
+Please provide your analysis in this structure:
+
+### Sacred Foundation Assessment
+[For each of the three items, indicate PASS or NEEDS WORK with brief explanation]
+
+### Structural Weight Scores
+[For each of the five items, give a score 0-10 with 1-2 sentence explanation]
+
+### Vocal Cadence Scores
+[For each of the four items, give a score 0-10 with 1-2 sentence explanation]
+
+### Anchoring Point (Strength)
+[Describe the most impactful, memorable moment or strength of the sermon]
+
+### Structural Drift (Area for Growth)
+[Identify where focus was lost or where improvement is needed most]
+
+### Measurable Step (Specific Action)
+[Give ONE specific, actionable thing the preacher can practice before their next sermon]
+
+### Overall Encouragement
+[End with a brief word of encouragement - remember, preaching is hard work and courage]
+
+Be warm but honest. Your goal is to help preachers become more effective communicators of truth.`;
+
+// ── Helpers ───────────────────────────────────────────────────────────
+
+function generateId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+// Map file extensions → MIME types for audio/video formats the picker may not report
+const MIME_MAP = {
+  mp3: 'audio/mpeg', mp4: 'video/mp4', m4a: 'audio/mp4', m4v: 'video/mp4',
+  aac: 'audio/aac', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/opus',
+  flac: 'audio/flac', wav: 'audio/wav', wma: 'audio/x-ms-wma',
+  amr: 'audio/amr', webm: 'audio/webm', caf: 'audio/x-caf',
+  aiff: 'audio/aiff', aif: 'audio/aiff', '3gp': 'audio/3gpp',
+  '3gpp': 'audio/3gpp', mpga: 'audio/mpeg', mpeg: 'video/mpeg',
+  mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska',
+  wmv: 'video/x-ms-wmv',
+};
+
+function getMimeType(file) {
+  if (file.mimeType) return file.mimeType;
+  const ext = (file.name || '').split('.').pop()?.toLowerCase();
+  return MIME_MAP[ext] || 'application/octet-stream';
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+// ── Storage: upload file to Supabase with progress tracking ──────────
+
+/**
+ * Upload a picked document (expo-document-picker asset: { uri, name, size, mimeType })
+ * to Supabase Storage using expo-file-system's binary upload task for progress.
+ * @param {object}   file       - { uri, name, size, mimeType }
+ * @param {function} onProgress - Callback: (percent, loaded, total) => void
+ * @returns {Promise<{path, publicUrl}>}
+ */
+async function uploadToStorage(file, onProgress) {
+  if (!supabase || !supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      'Supabase not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to mobile/.env.'
+    );
+  }
+
+  const ext = file.name?.split('.').pop() || 'mp3';
+  const path = `uploads/${generateId()}.${ext}`;
+
+  // Get auth token if logged in, otherwise fall back to anon key
+  let token = supabaseAnonKey;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) token = session.access_token;
+  } catch { /* use anon key */ }
+
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/sermon-uploads/${path}`;
+
+  const uploadTask = FileSystem.createUploadTask(
+    uploadUrl,
+    file.uri,
+    {
+      httpMethod: 'POST',
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': getMimeType(file),
+        'x-upsert': 'true',
+      },
+    },
+    (data) => {
+      if (typeof onProgress === 'function' && data.totalBytesExpectedToSend > 0) {
+        const pct = Math.round((data.totalBytesSent / data.totalBytesExpectedToSend) * 100);
+        onProgress(pct, data.totalBytesSent, data.totalBytesExpectedToSend);
+      }
+    }
+  );
+
+  let result;
+  try {
+    result = await uploadTask.uploadAsync();
+  } catch (err) {
+    throw new Error(`Network error during file upload: ${err.message}. Check your internet connection and that the Supabase project is not paused.`);
+  }
+
+  if (!result || result.status < 200 || result.status >= 300) {
+    const raw = result?.body || '';
+
+    if (result?.status === 413 || raw.includes('Payload too large') || raw.includes('too large')) {
+      throw new Error(
+        `Your file (${formatFileSize(file.size)}) exceeds the Supabase Storage upload size limit. `
+        + 'To fix this: go to your Supabase dashboard → Storage → scroll down to "Upload file size limit" → '
+        + `increase it to at least ${formatFileSize(file.size)}. Then try again.`
+      );
+    }
+
+    if (result?.status === 404 || raw.includes('Bucket not found') || raw.includes('does not exist')) {
+      throw new Error(
+        'Storage bucket "sermon-uploads" does not exist. '
+        + 'Go to your Supabase dashboard → Storage → New Bucket → name it "sermon-uploads" → toggle Public ON → Create. '
+        + 'Then go to SQL Editor and run the storage policy SQL from supabase/schema.sql.'
+      );
+    }
+
+    if (result?.status === 403 || raw.includes('policy') || raw.includes('security') || raw.includes('Unauthorized')) {
+      throw new Error(
+        'The "sermon-uploads" bucket exists but upload permission was denied. '
+        + 'Go to your Supabase dashboard → SQL Editor → '
+        + 'paste and run the storage policy SQL from supabase/schema.sql.'
+      );
+    }
+
+    throw new Error(`Upload failed (HTTP ${result?.status}): ${raw.slice(0, 300)}`);
+  }
+
+  const { data: urlData } = supabase.storage
+    .from('sermon-uploads')
+    .getPublicUrl(path);
+
+  if (!urlData?.publicUrl) {
+    throw new Error('Could not generate a public URL for the uploaded file. Make sure the "sermon-uploads" bucket is set to Public.');
+  }
+
+  return { path, publicUrl: urlData.publicUrl };
+}
+
+async function deleteFromStorage(path) {
+  if (!supabase) return;
+  try {
+    await supabase.storage.from('sermon-uploads').remove([path]);
+  } catch (e) {
+    console.warn('Storage cleanup failed (non-critical):', e.message);
+  }
+}
+
+// ── Retry helper ──────────────────────────────────────────────────────
+
+async function fetchWithRetry(url, options, { retries = 2, backoffMs = 2000 } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      // Don't retry client errors (4xx) — only retry network/server failures
+      if (response.ok || (response.status >= 400 && response.status < 500)) {
+        return response;
+      }
+      // 5xx — server error, worth retrying
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, backoffMs * (attempt + 1)));
+        continue;
+      }
+      return response; // last attempt, return whatever we got
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, backoffMs * (attempt + 1)));
+      }
+    }
+  }
+  throw lastError;
+}
+
+function apiUrl(path) {
+  if (!API_BASE_URL) {
+    throw new Error(
+      'EXPO_PUBLIC_API_BASE_URL is not set. Add it to mobile/.env — see mobile/README.md for the deployed Gamaliel API URL to use.'
+    );
+  }
+  return `${API_BASE_URL}${path}`;
+}
+
+// ── Transcription: Deepgram via Edge Function ────────────────────────
+
+async function transcribeAudio(fileUrl) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 min
+
+  try {
+    const response = await fetchWithRetry(apiUrl('/api/transcribe'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileUrl }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error(
+        `Transcription server returned invalid response (status ${response.status}). Check EXPO_PUBLIC_API_BASE_URL in mobile/.env.`
+      );
+    }
+
+    if (!response.ok) {
+      const msg =
+        data?.error?.message || `Transcription failed (HTTP ${response.status})`;
+      if (response.status === 500 && msg.includes('not configured')) {
+        throw new Error(
+          'Deepgram API key is missing on the server. Add DEEPGRAM_API_KEY to the backend deployment and redeploy.'
+        );
+      }
+      throw new Error(msg);
+    }
+
+    if (!data.transcript) {
+      throw new Error(
+        'Transcription returned empty. The file may be silent, corrupted, or in an unsupported audio format.'
+      );
+    }
+
+    return data;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error(
+        'Transcription timed out after 5 minutes. Try a shorter or smaller file.'
+      );
+    }
+    if (
+      err.message?.includes('Network request failed') ||
+      err.message?.includes('Failed to fetch')
+    ) {
+      throw new Error(
+        `Could not reach the transcription API at ${API_BASE_URL}. Check your internet connection and EXPO_PUBLIC_API_BASE_URL.`
+      );
+    }
+    throw err;
+  }
+}
+
+// ── Claude analysis via Edge Function ────────────────────────────────
+
+async function callClaudeAPI(requestBody) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 min
+
+  try {
+    const response = await fetchWithRetry(apiUrl('/api/analyze'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error(
+        `Server returned invalid response (status ${response.status}). Check EXPO_PUBLIC_API_BASE_URL in mobile/.env.`
+      );
+    }
+
+    if (!response.ok) {
+      const errorMsg =
+        data?.error?.message || `API error: ${response.status}`;
+      if (response.status === 500 && errorMsg.includes('not configured')) {
+        throw new Error(
+          'Anthropic API key is missing on the server. Add ANTHROPIC_API_KEY to the backend deployment and redeploy.'
+        );
+      }
+      throw new Error(errorMsg);
+    }
+
+    return data;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error(
+        'Claude analysis timed out after 5 minutes. Try again or use a shorter recording.'
+      );
+    }
+    if (
+      err.message?.includes('Network request failed') ||
+      err.message?.includes('Failed to fetch')
+    ) {
+      throw new Error(
+        `Could not reach the Gamaliel API at ${API_BASE_URL}. Check your internet connection and EXPO_PUBLIC_API_BASE_URL.`
+      );
+    }
+    throw err;
+  }
+}
+
+// ── Preflight: verify ALL services are connected before uploading ────
+//
+// Uses the /api/health endpoint to actually test Supabase, Deepgram, and
+// Anthropic connections server-side (where the real API keys live). This
+// catches invalid keys, missing buckets, expired keys, etc. BEFORE the
+// user waits through a long upload.
+
+async function preflightCheck() {
+  const issues = [];
+
+  // Client-side: check Supabase env vars are present
+  if (!supabase || !supabaseUrl || !supabaseAnonKey) {
+    issues.push(
+      'Supabase is not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to mobile/.env.'
+    );
+  }
+
+  // Server-side: use /api/health to test all three services with real API keys
+  try {
+    const res = await fetch(apiUrl('/api/health'));
+
+    if (res.status === 404) {
+      issues.push(
+        'The /api/health endpoint was not found. Check that EXPO_PUBLIC_API_BASE_URL points at a deployed Gamaliel backend.'
+      );
+    } else {
+      const health = await res.json();
+
+      if (!health.services?.supabase?.ok) {
+        issues.push(`Supabase: ${health.services?.supabase?.message || 'Connection failed.'}`);
+      }
+      if (!health.services?.deepgram?.ok) {
+        issues.push(`Deepgram: ${health.services?.deepgram?.message || 'Connection failed.'}`);
+      }
+      if (!health.services?.anthropic?.ok) {
+        issues.push(`Claude AI: ${health.services?.anthropic?.message || 'Connection failed.'}`);
+      }
+    }
+  } catch (err) {
+    issues.push(
+      `Cannot reach the Gamaliel API at ${API_BASE_URL || '(not set)'}. ${err.message}`
+    );
+  }
+
+  if (issues.length > 0) {
+    throw new Error(issues.join('\n\n'));
+  }
+}
+
+// ── Main entry point ─────────────────────────────────────────────────
+
+/**
+ * Analyze a sermon recording using Deepgram (transcription) + Claude (analysis).
+ *
+ * Flow: Preflight checks → Upload file to Supabase Storage →
+ *       Deepgram transcribes from URL → Claude analyzes the transcript →
+ *       cleanup temp file.
+ *
+ * @param {object}   mediaFile - expo-document-picker asset: { uri, name, size, mimeType }
+ * @param {object}   context   - Optional { title, goal, date }
+ * @param {function} onStatus  - Callback: (phase, message) => void
+ * @returns {Promise<{fullAnalysis, scores, transcript, rawResponse}>}
+ */
+export async function analyzeSermon(mediaFile, context = {}, onStatus) {
+  const status = typeof onStatus === 'function' ? onStatus : () => {};
+  const fileSize = mediaFile.size || 0;
+  const fileSizeGB = fileSize / (1024 * 1024 * 1024);
+  const humanSize = formatFileSize(fileSize);
+
+  // Hard limit: 5 GB (uploads beyond this are unreliable)
+  if (fileSizeGB > 5) {
+    throw new Error(
+      `File is ${humanSize} — too large for upload. `
+      + 'For best results, compress the video or extract just the audio '
+      + '(which is all Gamaliel needs for analysis). A 60-minute sermon audio is typically under 200 MB.'
+    );
+  }
+
+  if (fileSizeGB > 1) {
+    console.warn(`Large file (${humanSize}). Upload may take a while on slower connections.`);
+  }
+
+  // ── Preflight: verify everything is wired up before uploading ──
+  status('preflight', 'Checking API connections...');
+  await preflightCheck();
+
+  // ── Step 1: Upload to Supabase Storage with progress ──
+  status('upload', `Uploading ${humanSize} to secure storage — 0%`);
+  let storagePath = null;
+  let publicUrl;
+
+  try {
+    const upload = await uploadToStorage(mediaFile, (pct) => {
+      status('upload', `Uploading ${humanSize} to secure storage — ${pct}%`);
+    });
+    storagePath = upload.path;
+    publicUrl = upload.publicUrl;
+  } catch (err) {
+    throw new Error(`Upload failed: ${err.message}`);
+  }
+
+  try {
+    // ── Step 2: Transcribe with Deepgram ──
+    status(
+      'transcribe',
+      'Transcribing your sermon — this may take a few minutes for long recordings...'
+    );
+    const transcription = await transcribeAudio(publicUrl);
+    const transcript = transcription.transcript;
+    const durationMin = transcription.duration
+      ? (transcription.duration / 60).toFixed(1)
+      : null;
+    const wordCount = transcript.split(/\s+/).length;
+
+    status(
+      'transcribe-done',
+      `Transcription complete${durationMin ? ` (${durationMin} min, ` : ' ('}${wordCount} words)`
+    );
+
+    // ── Step 3: Analyze with Claude ──
+    status('analyze', 'Gamaliel is evaluating your sermon...');
+
+    let contextMessage =
+      'Please analyze this sermon based on the transcript below.\n\n';
+    if (context.title)
+      contextMessage += `Sermon Title/Scripture: ${context.title}\n`;
+    if (context.goal)
+      contextMessage += `Preacher's Primary Goal: ${context.goal}\n`;
+    if (context.date) contextMessage += `Preach Date: ${context.date}\n`;
+    if (durationMin)
+      contextMessage += `Recording Duration: ${durationMin} minutes\n`;
+    contextMessage += `\n--- SERMON TRANSCRIPT ---\n\n${transcript}`;
+
+    const requestBody = {
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 8192,
+      system: GAMALIEL_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: contextMessage,
+        },
+      ],
+    };
+
+    const data = await callClaudeAPI(requestBody);
+    const analysisText = data.content?.[0]?.text || '';
+    const scores = parseScoresFromResponse(analysisText);
+
+    status('done', 'Analysis complete!');
+
+    return {
+      fullAnalysis: analysisText,
+      scores,
+      transcript,
+      rawResponse: data,
+    };
+  } finally {
+    // Always clean up the temp file from storage
+    if (storagePath) {
+      deleteFromStorage(storagePath);
+    }
+  }
+}
+
+// ── Score parsing ────────────────────────────────────────────────────
+
+function parseScoresFromResponse(text) {
+  const scores = {
+    theologicalFidelity: null,
+    exegeticalSoundness: null,
+    gospelCentrality: null,
+    relevancy: null,
+    clarity: null,
+    connectivity: null,
+    precision: null,
+    callToAction: null,
+    relatability: null,
+    pacing: null,
+    enthusiasm: null,
+    charisma: null,
+  };
+
+  scores.theologicalFidelity = /theological fidelity[:\s]*pass/i.test(text);
+  scores.exegeticalSoundness = /exegetical soundness[:\s]*pass/i.test(text);
+  scores.gospelCentrality = /gospel centrality[:\s]*pass/i.test(text);
+
+  const scorePatterns = {
+    relevancy: /relevancy[:\s-]*(\d+)/i,
+    clarity: /clarity[:\s-]*(\d+)/i,
+    connectivity: /connectivity[:\s-]*(\d+)/i,
+    precision: /precision[:\s-]*(\d+)/i,
+    callToAction: /call to action[:\s-]*(\d+)/i,
+    relatability: /relatability[:\s-]*(\d+)/i,
+    pacing: /pacing[:\s-]*(\d+)/i,
+    enthusiasm: /enthusiasm[:\s-]*(\d+)/i,
+    charisma: /charisma[:\s-]*(\d+)/i,
+  };
+
+  for (const [key, pattern] of Object.entries(scorePatterns)) {
+    const match = text.match(pattern);
+    if (match) {
+      scores[key] = Math.min(10, Math.max(0, parseInt(match[1], 10)));
+    }
+  }
+
+  return scores;
+}
+
+export default { analyzeSermon };

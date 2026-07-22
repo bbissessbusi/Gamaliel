@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Gamaliel",
+    "slug": "gamaliel",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#070304",
+    "scheme": "gamaliel",
+    "ios": {
+      "bundleIdentifier": "com.scribeinc.gamaliel",
+      "supportsTablet": true,
+      "backgroundColor": "#070304"
+    },
+    "android": {
+      "package": "com.scribeinc.gamaliel",
+      "adaptiveIcon": {
+        "backgroundColor": "#070304",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#070304"
+        }
+      ]
+    ]
+  }
+}
